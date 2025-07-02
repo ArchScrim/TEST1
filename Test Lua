@@ -1,191 +1,189 @@
+--// Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
+local UserInputService = UIS
 local player = Players.LocalPlayer
-local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 
+--// Variables
 local triggerEnabled = false
-local toggleMenuKey = Enum.KeyCode.RightControl
-local triggerKey = Enum.KeyCode.C
-local configToggleKey = Enum.KeyCode.V
-local lastClick = 0
-local clickCooldown = 0.05 -- par défaut 50 ms
+local toggleMenuKey = Enum.KeyCode.RightControl -- Ouvrir/fermer menu et activer/désactiver trigger
+local clickKey = Enum.KeyCode.C -- Touche pour activer triggerbot (peut modifier)
+local triggerActive = false
 
-local predictionConfigs = {
-    ["50ms"] = 0.05,
-    ["80ms"] = 0.08,
-}
-local currentConfig = "50ms"
+local checkInterval = 0.1 -- 100 ms entre chaque check
+local lastCheck = 0
+local clickCooldown = 0.1 -- 100 ms entre chaque clic
+local lastClick = 0
+
+local predictionTimes = {["50ms"] = 0.05, ["80ms"] = 0.08}
+local currentPrediction = "50ms"
 
 local hitParts = {
-    "Head", "UpperTorso", "Torso", "LowerTorso",
-    "LeftUpperArm", "RightUpperArm",
-    "LeftLowerArm", "RightLowerArm",
-    "LeftHand", "RightHand",
-    "LeftUpperLeg", "RightUpperLeg",
-    "LeftLowerLeg", "RightLowerLeg",
-    "LeftFoot", "RightFoot"
+	"Head", "UpperTorso", "Torso", "LowerTorso",
+	"LeftUpperArm", "RightUpperArm",
+	"LeftLowerArm", "RightLowerArm",
+	"LeftHand", "RightHand",
+	"LeftUpperLeg", "RightUpperLeg",
+	"LeftLowerLeg", "RightLowerLeg",
+	"LeftFoot", "RightFoot"
 }
 
--- GUI
-local gui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-gui.Name = "ArchScrimTriggerBotGUI"
+--// GUI minimaliste
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TriggerBotGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
 
-local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 320, 0, 150)
-frame.Position = UDim2.new(0.5, -160, 0.5, -75)
-frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-frame.BorderSizePixel = 0
-frame.Visible = true
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 250, 0, 120)
+Frame.Position = UDim2.new(0, 10, 0, 10)
+Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Frame.BorderSizePixel = 0
+Frame.Visible = false
+Frame.Parent = ScreenGui
 
-local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundTransparency = 1
-title.Text = "TriggerBot Da Hood - By ArchScrim"
-title.TextColor3 = Color3.fromRGB(180, 180, 180)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundTransparency = 1
+Title.Text = "TriggerBot by ArchScrim"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Frame
 
-local statusLabel = Instance.new("TextLabel", frame)
-statusLabel.Position = UDim2.new(0, 10, 0, 40)
-statusLabel.Size = UDim2.new(1, -20, 0, 25)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Status: OFF (Appuie C)"
-statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 16
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -20, 0, 25)
+StatusLabel.Position = UDim2.new(0, 10, 0, 35)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.TextColor3 = Color3.new(0, 1, 0)
+StatusLabel.TextScaled = true
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Text = "Status: OFF"
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = Frame
 
-local configLabel = Instance.new("TextLabel", frame)
-configLabel.Position = UDim2.new(0, 10, 0, 70)
-configLabel.Size = UDim2.new(1, -20, 0, 25)
-configLabel.BackgroundTransparency = 1
-configLabel.Text = "Config prédiction: 50ms"
-configLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-configLabel.Font = Enum.Font.Gotham
-configLabel.TextSize = 16
-configLabel.TextXAlignment = Enum.TextXAlignment.Left
+local PredictionLabel = Instance.new("TextLabel")
+PredictionLabel.Size = UDim2.new(1, -20, 0, 25)
+PredictionLabel.Position = UDim2.new(0, 10, 0, 65)
+PredictionLabel.BackgroundTransparency = 1
+PredictionLabel.TextColor3 = Color3.new(1, 1, 1)
+PredictionLabel.TextScaled = true
+PredictionLabel.Font = Enum.Font.Gotham
+PredictionLabel.Text = "Prediction: 50ms"
+PredictionLabel.TextXAlignment = Enum.TextXAlignment.Left
+PredictionLabel.Parent = Frame
 
-local infoLabel = Instance.new("TextLabel", frame)
-infoLabel.Position = UDim2.new(0, 10, 1, -30)
-infoLabel.Size = UDim2.new(1, -20, 0, 20)
-infoLabel.BackgroundTransparency = 1
-infoLabel.Text = "Toggle Menu: Right Ctrl | TriggerBot: C | Change Config: V"
-infoLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
-infoLabel.Font = Enum.Font.Gotham
-infoLabel.TextSize = 14
-infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+local TogglePredictionButton = Instance.new("TextButton")
+TogglePredictionButton.Size = UDim2.new(0, 120, 0, 25)
+TogglePredictionButton.Position = UDim2.new(0, 10, 0, 95)
+TogglePredictionButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+TogglePredictionButton.TextColor3 = Color3.new(1,1,1)
+TogglePredictionButton.Text = "Toggle Prediction"
+TogglePredictionButton.Font = Enum.Font.GothamSemibold
+TogglePredictionButton.TextScaled = true
+TogglePredictionButton.Parent = Frame
 
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == toggleMenuKey then
-        frame.Visible = not frame.Visible
-    elseif input.KeyCode == triggerKey then
-        triggerEnabled = not triggerEnabled
-        statusLabel.Text = "Status: " .. (triggerEnabled and "ON (C)" or "OFF (C)")
-        statusLabel.TextColor3 = triggerEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-    elseif input.KeyCode == configToggleKey then
-        if currentConfig == "50ms" then
-            currentConfig = "80ms"
-            clickCooldown = 0.08
-        else
-            currentConfig = "50ms"
-            clickCooldown = 0.05
-        end
-        configLabel.Text = "Config prédiction: " .. currentConfig
-    end
+TogglePredictionButton.MouseButton1Click:Connect(function()
+	if currentPrediction == "50ms" then
+		currentPrediction = "80ms"
+	else
+		currentPrediction = "50ms"
+	end
+	PredictionLabel.Text = "Prediction: "..currentPrediction
 end)
 
+--// Fonctions utilitaires
+
 local function canSee(part)
-    local origin = camera.CFrame.Position
-    local direction = (part.Position - origin)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterDescendantsInstances = {player.Character}
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    local rayResult = workspace:Raycast(origin, direction, rayParams)
-    return rayResult and rayResult.Instance and rayResult.Instance:IsDescendantOf(part.Parent)
+	local origin = camera.CFrame.Position
+	local direction = (part.Position - origin)
+	local rayParams = RaycastParams.new()
+	rayParams.FilterDescendantsInstances = {player.Character}
+	rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+	local rayResult = workspace:Raycast(origin, direction, rayParams)
+	return rayResult and rayResult.Instance and rayResult.Instance:IsDescendantOf(part.Parent)
 end
 
 local function isValidTarget(character)
-    if not character then return false end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 5 then
-        return false
-    end
-    return true
+	if not character then return false end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 5 then
+		return false
+	end
+	return true
 end
 
 local function getPredictedPosition(part, latency)
-    if not part or not part.Parent then return nil end
-    local root = part.Parent:FindFirstChild("HumanoidRootPart")
-    if not root then return part.Position end
-
-    local velocity = root.Velocity or Vector3.new(0, 0, 0)
-    return part.Position + velocity * latency
+	if not part or not part.Parent then return nil end
+	local root = part.Parent:FindFirstChild("HumanoidRootPart")
+	if not root then return part.Position end
+	local velocity = root.Velocity or Vector3.new(0, 0, 0)
+	return part.Position + velocity * latency
 end
 
-local function getClosestTargetToMouse()
-    local mousePos = UIS:GetMouseLocation()
-    local closestDist = math.huge
-    local closestPart = nil
+local function getTargetUnderCursor()
+	local mousePos = UIS:GetMouseLocation()
+	local closestDist = math.huge
+	local closestPart = nil
 
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Character and isValidTarget(plr.Character) then
-            for _, partName in ipairs(hitParts) do
-                local part = plr.Character:FindFirstChild(partName)
-                if part and canSee(part) then
-                    local predictedPos = getPredictedPosition(part, predictionConfigs[currentConfig])
-                    local screenPos, onScreen = camera:WorldToViewportPoint(predictedPos)
-                    if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-                        if dist < closestDist and dist <= 15 then
-                            closestDist = dist
-                            closestPart = part
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return closestPart
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character and isValidTarget(plr.Character) then
+			for _, partName in ipairs(hitParts) do
+				local part = plr.Character:FindFirstChild(partName)
+				if part and canSee(part) then
+					local predictedPos = getPredictedPosition(part, predictionTimes[currentPrediction])
+					local screenPos, onScreen = camera:WorldToViewportPoint(predictedPos)
+					if onScreen then
+						local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
+						if dist < closestDist and dist <= 15 then -- seuil de proximité du curseur (pixels)
+							closestDist = dist
+							closestPart = part
+						end
+					end
+				end
+			end
+		end
+	end
+	return closestPart
 end
 
-RunService.Heartbeat:Connect(function()
-    if not triggerEnabled then return end
+--// Input handling
 
-    local now = tick()
-    if now - lastClick < clickCooldown then return end
+UIS.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
 
-    local targetPart = getClosestTargetToMouse()
-    if targetPart then
-        lastClick = now
-        mouse1press()
-        mouse1release()
-    end
+	if input.KeyCode == toggleMenuKey then
+		triggerEnabled = not triggerEnabled
+		Frame.Visible = triggerEnabled
+		StatusLabel.Text = "Status: "..(triggerEnabled and "ON" or "OFF")
+	end
+
+	if input.KeyCode == triggerKey then
+		triggerActive = true
+	end
 end)
 
--- Notification simple
-local function notify(text)
-    local notif = Instance.new("TextLabel", gui)
-    notif.Size = UDim2.new(0, 250, 0, 40)
-    notif.Position = UDim2.new(1, -260, 1, -60)
-    notif.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    notif.TextColor3 = Color3.fromRGB(100, 255, 100)
-    notif.Text = text
-    notif.Font = Enum.Font.GothamBold
-    notif.TextSize = 18
-    notif.TextWrapped = true
-    notif.BorderSizePixel = 0
-    notif.ZIndex = 12
-    Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 10)
+UIS.InputEnded:Connect(function(input)
+	if input.KeyCode == triggerKey then
+		triggerActive = false
+	end
+end)
 
-    notif.BackgroundTransparency = 1
-    notif:TweenPosition(UDim2.new(1, -260, 1, -90), "Out", "Quad", 0.5, true)
-    notif:TweenSize(UDim2.new(0, 250, 0, 40), "Out", "Quad", 0.5, true)
-    wait(3)
-    notif:Destroy()
-end
+--// Main loop
 
-notify("TriggerBot prêt - By ArchScrim")
+RunService.Heartbeat:Connect(function()
+	if not triggerEnabled or not triggerActive then return end
+
+	local now = tick()
+	if now - lastCheck < checkInterval then return end
+	lastCheck = now
+
+	local targetPart = getTargetUnderCursor()
+	if targetPart and now - lastClick >= clickCooldown then
+		lastClick = now
+		mouse1press()
+		mouse1release()
+	end
+end)
