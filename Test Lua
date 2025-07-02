@@ -1,4 +1,3 @@
--- TriggerBot Da Hood ultra optimisé - By ArchScrim
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -9,8 +8,15 @@ local camera = workspace.CurrentCamera
 local triggerEnabled = false
 local toggleMenuKey = Enum.KeyCode.RightControl
 local triggerKey = Enum.KeyCode.C
+local configToggleKey = Enum.KeyCode.V
 local lastClick = 0
-local clickCooldown = 0.06 -- 60ms entre chaque tir max
+local clickCooldown = 0.05 -- par défaut 50 ms
+
+local predictionConfigs = {
+    ["50ms"] = 0.05,
+    ["80ms"] = 0.08,
+}
+local currentConfig = "50ms"
 
 local hitParts = {
     "Head", "UpperTorso", "Torso", "LowerTorso",
@@ -22,13 +28,13 @@ local hitParts = {
     "LeftFoot", "RightFoot"
 }
 
--- GUI simplifié
+-- GUI
 local gui = Instance.new("ScreenGui", game:GetService("CoreGui"))
 gui.Name = "ArchScrimTriggerBotGUI"
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 300, 0, 110)
-frame.Position = UDim2.new(0.5, -150, 0.5, -55)
+frame.Size = UDim2.new(0, 320, 0, 150)
+frame.Position = UDim2.new(0.5, -160, 0.5, -75)
 frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 frame.BorderSizePixel = 0
 frame.Visible = true
@@ -51,17 +57,46 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 16
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
+local configLabel = Instance.new("TextLabel", frame)
+configLabel.Position = UDim2.new(0, 10, 0, 70)
+configLabel.Size = UDim2.new(1, -20, 0, 25)
+configLabel.BackgroundTransparency = 1
+configLabel.Text = "Config prédiction: 50ms"
+configLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+configLabel.Font = Enum.Font.Gotham
+configLabel.TextSize = 16
+configLabel.TextXAlignment = Enum.TextXAlignment.Left
+
 local infoLabel = Instance.new("TextLabel", frame)
 infoLabel.Position = UDim2.new(0, 10, 1, -30)
 infoLabel.Size = UDim2.new(1, -20, 0, 20)
 infoLabel.BackgroundTransparency = 1
-infoLabel.Text = "Toggle Menu: Right Ctrl | Toggle TriggerBot: C"
+infoLabel.Text = "Toggle Menu: Right Ctrl | TriggerBot: C | Change Config: V"
 infoLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
 infoLabel.Font = Enum.Font.Gotham
 infoLabel.TextSize = 14
 infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- Fonction pour savoir si on peut voir la hitbox (raycast)
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == toggleMenuKey then
+        frame.Visible = not frame.Visible
+    elseif input.KeyCode == triggerKey then
+        triggerEnabled = not triggerEnabled
+        statusLabel.Text = "Status: " .. (triggerEnabled and "ON (C)" or "OFF (C)")
+        statusLabel.TextColor3 = triggerEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+    elseif input.KeyCode == configToggleKey then
+        if currentConfig == "50ms" then
+            currentConfig = "80ms"
+            clickCooldown = 0.08
+        else
+            currentConfig = "50ms"
+            clickCooldown = 0.05
+        end
+        configLabel.Text = "Config prédiction: " .. currentConfig
+    end
+end)
+
 local function canSee(part)
     local origin = camera.CFrame.Position
     local direction = (part.Position - origin)
@@ -75,54 +110,63 @@ end
 local function isValidTarget(character)
     if not character then return false end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 5 then -- ignore quasi morts
+    if not humanoid or humanoid.Health <= 5 then
         return false
     end
     return true
 end
 
--- Fonction principale TriggerBot ultra rapide et simple
-RunService.Heartbeat:Connect(function()
-    if not triggerEnabled then return end
+local function getPredictedPosition(part, latency)
+    if not part or not part.Parent then return nil end
+    local root = part.Parent:FindFirstChild("HumanoidRootPart")
+    if not root then return part.Position end
 
+    local velocity = root.Velocity or Vector3.new(0, 0, 0)
+    return part.Position + velocity * latency
+end
+
+local function getClosestTargetToMouse()
     local mousePos = UIS:GetMouseLocation()
-    local now = tick()
-    if now - lastClick < clickCooldown then return end
+    local closestDist = math.huge
+    local closestPart = nil
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character and isValidTarget(plr.Character) then
             for _, partName in ipairs(hitParts) do
                 local part = plr.Character:FindFirstChild(partName)
                 if part and canSee(part) then
-                    local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+                    local predictedPos = getPredictedPosition(part, predictionConfigs[currentConfig])
+                    local screenPos, onScreen = camera:WorldToViewportPoint(predictedPos)
                     if onScreen then
                         local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-                        if dist <= 15 then -- si la souris touche la hitbox (15px)
-                            lastClick = now
-                            mouse1press()
-                            mouse1release()
-                            return -- éviter plusieurs tirs en même frame
+                        if dist < closestDist and dist <= 15 then
+                            closestDist = dist
+                            closestPart = part
                         end
                     end
                 end
             end
         end
     end
-end)
 
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+    return closestPart
+end
 
-    if input.KeyCode == toggleMenuKey then
-        frame.Visible = not frame.Visible
-    elseif input.KeyCode == triggerKey then
-        triggerEnabled = not triggerEnabled
-        statusLabel.Text = "Status: " .. (triggerEnabled and "ON (C)" or "OFF (C)")
-        statusLabel.TextColor3 = triggerEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+RunService.Heartbeat:Connect(function()
+    if not triggerEnabled then return end
+
+    local now = tick()
+    if now - lastClick < clickCooldown then return end
+
+    local targetPart = getClosestTargetToMouse()
+    if targetPart then
+        lastClick = now
+        mouse1press()
+        mouse1release()
     end
 end)
 
--- Notification simple au lancement
+-- Notification simple
 local function notify(text)
     local notif = Instance.new("TextLabel", gui)
     notif.Size = UDim2.new(0, 250, 0, 40)
@@ -145,4 +189,3 @@ local function notify(text)
 end
 
 notify("TriggerBot prêt - By ArchScrim")
-
