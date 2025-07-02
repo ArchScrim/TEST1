@@ -12,14 +12,6 @@ local menuVisible = true          -- Menu visible au lancement
 local toggleMenuKey = Enum.KeyCode.RightControl -- Toggle affichage menu
 local triggerToggleKey = Enum.KeyCode.C         -- Toggle triggerbot on/off
 
-local checkInterval = 0.1         -- Vérification toutes les 100 ms
-local lastCheck = 0
-local clickCooldown = 0.1         -- 100 ms entre clics
-local lastClick = 0
-
-local predictionTimes = {["50ms"] = 0.05, ["80ms"] = 0.08}
-local currentPrediction = "50ms"
-
 local hitParts = {
 	"Head", "UpperTorso", "Torso", "LowerTorso",
 	"LeftUpperArm", "RightUpperArm",
@@ -30,6 +22,9 @@ local hitParts = {
 	"LeftFoot", "RightFoot"
 }
 
+local predictionTimes = {["30ms"] = 0.03, ["80ms"] = 0.08}
+local currentPrediction = "30ms"
+
 -- GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "TriggerBotGUI"
@@ -37,18 +32,26 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = player:WaitForChild("PlayerGui")
 
 local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 270, 0, 130)
+Frame.Size = UDim2.new(0, 280, 0, 140)
 Frame.Position = UDim2.new(0, 10, 0, 10)
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Frame.BorderSizePixel = 0
 Frame.Visible = menuVisible
 Frame.Parent = ScreenGui
+Frame.ClipsDescendants = true
+Frame.BackgroundTransparency = 0.1
+Frame.AutomaticSize = Enum.AutomaticSize.Y
+
+local UIStroke = Instance.new("UIStroke", Frame)
+UIStroke.Thickness = 1
+UIStroke.Color = Color3.fromRGB(0, 170, 255)
+UIStroke.Transparency = 0.2
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 30)
 Title.BackgroundTransparency = 1
 Title.Text = "TriggerBot by ArchScrim"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextColor3 = Color3.fromRGB(0, 170, 255)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
 Title.Parent = Frame
@@ -59,7 +62,7 @@ StatusLabel.Position = UDim2.new(0, 10, 0, 40)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
 StatusLabel.TextScaled = true
-StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Font = Enum.Font.GothamSemibold
 StatusLabel.Text = "Status: ON"
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatusLabel.Parent = Frame
@@ -70,26 +73,26 @@ PredictionLabel.Position = UDim2.new(0, 10, 0, 70)
 PredictionLabel.BackgroundTransparency = 1
 PredictionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 PredictionLabel.TextScaled = true
-PredictionLabel.Font = Enum.Font.Gotham
-PredictionLabel.Text = "Prediction: 50ms"
+PredictionLabel.Font = Enum.Font.GothamSemibold
+PredictionLabel.Text = "Prediction: 30ms"
 PredictionLabel.TextXAlignment = Enum.TextXAlignment.Left
 PredictionLabel.Parent = Frame
 
 local TogglePredictionButton = Instance.new("TextButton")
-TogglePredictionButton.Size = UDim2.new(0, 150, 0, 30)
+TogglePredictionButton.Size = UDim2.new(0, 170, 0, 30)
 TogglePredictionButton.Position = UDim2.new(0, 10, 0, 100)
-TogglePredictionButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+TogglePredictionButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
 TogglePredictionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-TogglePredictionButton.Text = "Toggle Prediction"
-TogglePredictionButton.Font = Enum.Font.GothamSemibold
+TogglePredictionButton.Text = "Toggle Prediction (30ms / 80ms)"
+TogglePredictionButton.Font = Enum.Font.GothamBold
 TogglePredictionButton.TextScaled = true
 TogglePredictionButton.Parent = Frame
 
 TogglePredictionButton.MouseButton1Click:Connect(function()
-	if currentPrediction == "50ms" then
+	if currentPrediction == "30ms" then
 		currentPrediction = "80ms"
 	else
-		currentPrediction = "50ms"
+		currentPrediction = "30ms"
 	end
 	PredictionLabel.Text = "Prediction: "..currentPrediction
 end)
@@ -137,7 +140,7 @@ local function getTargetUnderCursor()
 					local screenPos, onScreen = camera:WorldToViewportPoint(predictedPos)
 					if onScreen then
 						local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-						if dist < closestDist and dist <= 15 then -- seuil 15px près du curseur
+						if dist < closestDist and dist <= 15 then -- seuil 15 px autour curseur
 							closestDist = dist
 							closestPart = part
 						end
@@ -163,17 +166,12 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Main loop
-
-RunService.Heartbeat:Connect(function()
+-- Main loop, utilise RenderStepped pour la meilleure fréquence et fluidité
+RunService.RenderStepped:Connect(function()
 	if not triggerEnabled then return end
-	local now = tick()
-	if now - lastCheck < checkInterval then return end
-	lastCheck = now
 
 	local targetPart = getTargetUnderCursor()
-	if targetPart and now - lastClick >= clickCooldown then
-		lastClick = now
+	if targetPart then
 		mouse1press()
 		mouse1release()
 	end
