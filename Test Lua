@@ -1,141 +1,111 @@
--- Services
+-- TriggerBot by ArchScrim - Optimisé pour Da Hood
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
-local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
--- Configuration
-local ToggleKey = Enum.KeyCode.C
-local MenuKey = Enum.KeyCode.RightControl
-local TriggerEnabled = true
-local MenuVisible = true
-local PredictionOptions = {["30ms"] = 0.03, ["80ms"] = 0.08}
-local CurrentPrediction = "30ms"
-local ShootDelay = 0.03
+-- === CONFIGURATION ===
+local TRIGGER_KEY = Enum.KeyCode.C
+local MENU_KEY = Enum.KeyCode.RightControl
+local SHOOT_DELAY = 0.03 -- 30 ms
+local MAX_DISTANCE = 15 -- pixels entre curseur et cible
+
+local predictionTime = 0.03
+local BodyParts = {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart", "LeftArm", "RightArm", "LeftLeg", "RightLeg"}
+
+-- === VARIABLES ===
+local TriggerEnabled = false
 local LastShot = 0
+local MenuVisible = true
 
--- Parts ciblées
-local BodyParts = {
-	"Head", "UpperTorso", "LowerTorso",
-	"LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
-	"LeftHand", "RightHand", "LeftUpperLeg", "RightUpperLeg",
-	"LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot"
-}
-
--- UI
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
-ScreenGui.Name = "TriggerBotUI"
-ScreenGui.ResetOnSpawn = false
+-- === GUI ===
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "TriggerBotMenu"
 
 local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0, 280, 0, 150)
-Frame.Position = UDim2.new(0, 10, 0, 10)
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Frame.Visible = MenuVisible
-
-local UIStroke = Instance.new("UIStroke", Frame)
-UIStroke.Color = Color3.fromRGB(0, 170, 255)
-UIStroke.Thickness = 1.5
+Frame.Position = UDim2.new(0, 20, 0, 100)
+Frame.Size = UDim2.new(0, 200, 0, 100)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Frame.BorderSizePixel = 0
+Frame.Visible = true
 
 local Title = Instance.new("TextLabel", Frame)
-Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Text = "TriggerBot (By ArchScrim)"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.BackgroundTransparency = 1
-Title.Text = "TriggerBot by ArchScrim"
-Title.TextColor3 = Color3.fromRGB(0, 170, 255)
-Title.Font = Enum.Font.GothamBold
-Title.TextScaled = true
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 18
 
-local Status = Instance.new("TextLabel", Frame)
-Status.Size = UDim2.new(1, -20, 0, 25)
-Status.Position = UDim2.new(0, 10, 0, 35)
-Status.BackgroundTransparency = 1
-Status.Font = Enum.Font.Gotham
-Status.TextColor3 = Color3.fromRGB(0, 255, 0)
-Status.Text = "Status: ON"
-Status.TextXAlignment = Enum.TextXAlignment.Left
-Status.TextScaled = true
+local StatusLabel = Instance.new("TextLabel", Frame)
+StatusLabel.Position = UDim2.new(0, 0, 0, 40)
+StatusLabel.Size = UDim2.new(1, 0, 0, 25)
+StatusLabel.Text = "Status: OFF"
+StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextSize = 18
 
-local PredictionLabel = Instance.new("TextLabel", Frame)
-PredictionLabel.Size = UDim2.new(1, -20, 0, 25)
-PredictionLabel.Position = UDim2.new(0, 10, 0, 65)
-PredictionLabel.BackgroundTransparency = 1
-PredictionLabel.Font = Enum.Font.Gotham
-PredictionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-PredictionLabel.Text = "Prediction: 30ms"
-PredictionLabel.TextXAlignment = Enum.TextXAlignment.Left
-PredictionLabel.TextScaled = true
+-- === TOGGLE FUNCTION ===
+function ToggleTrigger()
+	TriggerEnabled = not TriggerEnabled
+	StatusLabel.Text = "Status: " .. (TriggerEnabled and "ON" or "OFF")
+	StatusLabel.TextColor3 = TriggerEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+end
 
-local ToggleButton = Instance.new("TextButton", Frame)
-ToggleButton.Size = UDim2.new(0, 180, 0, 30)
-ToggleButton.Position = UDim2.new(0, 10, 0, 100)
-ToggleButton.Text = "Toggle Prediction (30ms / 80ms)"
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-ToggleButton.TextScaled = true
+-- === PREDICTION ===
+local function Predict(part)
+	if not part then return nil end
+	local velocity = part.Velocity
+	return part.Position + (velocity * predictionTime)
+end
 
-ToggleButton.MouseButton1Click:Connect(function()
-	if CurrentPrediction == "30ms" then
-		CurrentPrediction = "80ms"
-	else
-		CurrentPrediction = "30ms"
-	end
-	PredictionLabel.Text = "Prediction: " .. CurrentPrediction
-end)
-
--- Notification (bas droite)
-local Notify = Instance.new("TextLabel", ScreenGui)
-Notify.Size = UDim2.new(0, 200, 0, 25)
-Notify.Position = UDim2.new(1, -210, 1, -40)
-Notify.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-Notify.TextColor3 = Color3.fromRGB(255, 255, 255)
-Notify.Text = "TriggerBot loaded - by ArchScrim"
-Notify.Font = Enum.Font.GothamSemibold
-Notify.TextScaled = true
-Notify.BackgroundTransparency = 0.2
-Notify.TextXAlignment = Enum.TextXAlignment.Center
-
--- Fonction utilitaire
+-- === CHECK TARGET VALIDITY ===
 local function IsValidTarget(char)
-	local human = char:FindFirstChildOfClass("Humanoid")
-	return human and human.Health > 5
-end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health < 5 then return false end
 
-local function CanSee(part)
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return false end
+
 	local origin = Camera.CFrame.Position
-	local direction = (part.Position - origin)
-	local params = RaycastParams.new()
-	params.FilterDescendantsInstances = {LocalPlayer.Character}
-	params.FilterType = Enum.RaycastFilterType.Blacklist
-	local result = workspace:Raycast(origin, direction, params)
-	return result and result.Instance and result.Instance:IsDescendantOf(part.Parent)
+	local direction = (root.Position - origin).Unit * 1000
+
+	local ray = RaycastParams.new()
+	ray.FilterType = Enum.RaycastFilterType.Blacklist
+	ray.FilterDescendantsInstances = {LocalPlayer.Character, char}
+
+	local result = workspace:Raycast(origin, direction, ray)
+	if result and result.Instance and not char:IsAncestorOf(result.Instance) then
+		return false -- bloqué par un mur
+	end
+
+	return true
 end
 
-local function PredictPos(part)
-	local root = part.Parent and part.Parent:FindFirstChild("HumanoidRootPart")
-	local velocity = root and root.Velocity or Vector3.zero
-	local predictionTime = PredictionOptions[CurrentPrediction]
-	return part.Position + velocity * predictionTime
-end
+-- === TRIGGER LOOP ===
+RunService.Heartbeat:Connect(function()
+	if not TriggerEnabled then return end
+	if tick() - LastShot < SHOOT_DELAY then return end
 
-local function GetTarget()
 	local mousePos = UIS:GetMouseLocation()
-	local closestPart = nil
-	local shortestDist = math.huge
+	local closest, closestDist = nil, MAX_DISTANCE
 
 	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr ~= LocalPlayer and plr.Character and IsValidTarget(plr.Character) then
 			for _, partName in ipairs(BodyParts) do
 				local part = plr.Character:FindFirstChild(partName)
-				if part and CanSee(part) then
-					local predicted = PredictPos(part)
+				if part then
+					local predicted = Predict(part)
 					local screenPos, onScreen = Camera:WorldToViewportPoint(predicted)
 					if onScreen then
-						local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-						if distance < shortestDist and distance < 15 then
-							closestPart = part
-							shortestDist = distance
+						local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
+						if dist < closestDist then
+							closest = part
+							closestDist = dist
 						end
 					end
 				end
@@ -143,31 +113,29 @@ local function GetTarget()
 		end
 	end
 
-	return closestPart
-end
-
--- Toggle input
-UIS.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == ToggleKey then
-		TriggerEnabled = not TriggerEnabled
-		Status.Text = "Status: " .. (TriggerEnabled and "ON" or "OFF")
-	end
-	if input.KeyCode == MenuKey then
-		MenuVisible = not MenuVisible
-		Frame.Visible = MenuVisible
-	end
-end)
-
--- Trigger Loop (Heartbeat = meilleur FPS)
-RunService.Heartbeat:Connect(function()
-	if not TriggerEnabled then return end
-	if tick() - LastShot < ShootDelay then return end
-
-	local part = GetTarget()
-	if part then
+	if closest then
 		mouse1press()
 		mouse1release()
 		LastShot = tick()
 	end
 end)
+
+-- === TOGGLE INPUTS ===
+UIS.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+
+	if input.KeyCode == TRIGGER_KEY then
+		ToggleTrigger()
+	elseif input.KeyCode == MENU_KEY then
+		MenuVisible = not MenuVisible
+		Frame.Visible = MenuVisible
+	end
+end)
+
+-- === NOTIFICATION ===
+local StarterGui = game:GetService("StarterGui")
+StarterGui:SetCore("SendNotification", {
+	Title = "TriggerBot",
+	Text = "Script lancé - By ArchScrim",
+	Duration = 4
+})
