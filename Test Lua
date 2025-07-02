@@ -1,123 +1,208 @@
--- AimLock by ArchScrim x ChatGPT - Compatible Xeno
--- Touche Q pour lock | Ctrl pour ouvrir/fermer le menu
-
+-- AimLock By ArchScrim - Smooth & Legit (Da Hood style)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 repeat wait() until player.Character and player:FindFirstChild("PlayerGui")
 
--- ✅ Notification de lancement
-StarterGui:SetCore("SendNotification", {
-	Title = "ArchScrim",
-	Text = "Script lancé avec succès",
-	Duration = 5
-})
-
--- AimLock Variables
+-- Variables
 local aimlockEnabled = false
-local aimKey = Enum.KeyCode.Q
-local prediction = 0.06
+local aimKey = Enum.KeyCode.Q -- touche d'activation par défaut
+local prediction = 0.055 -- prédiction légère (~55ms)
 local currentTarget = nil
 local menuVisible = true
 
--- UI dans CoreGui (compatible Xeno)
+-- GUI Setup
 local gui = Instance.new("ScreenGui")
-gui.Name = "AimLockMenu"
+gui.Name = "ArchScrimAimLock"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = game:GetService("CoreGui")
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 280, 0, 160)
-frame.Position = UDim2.new(0.5, -140, 0.5, -80)
+frame.Size = UDim2.new(0, 300, 0, 180)
+frame.Position = UDim2.new(0.5, -150, 0.5, -90)
 frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 frame.BorderSizePixel = 0
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
 
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1, 0, 0, 40)
 title.BackgroundTransparency = 1
-title.Text = "AimLock System"
+title.Text = "AimLock System - By ArchScrim"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 18
+title.TextSize = 20
 
 local status = Instance.new("TextLabel", frame)
-status.Position = UDim2.new(0, 0, 0, 40)
-status.Size = UDim2.new(1, 0, 0, 30)
+status.Position = UDim2.new(0, 10, 0, 45)
+status.Size = UDim2.new(1, -20, 0, 25)
 status.BackgroundTransparency = 1
 status.Text = "Status: OFF (Q)"
-status.TextColor3 = Color3.new(1, 1, 1)
-status.Font = Enum.Font.Gotham
-status.TextSize = 16
+status.TextColor3 = Color3.new(1, 0.4, 0.4)
+status.Font = Enum.Font.GothamSemibold
+status.TextSize = 18
+status.TextXAlignment = Enum.TextXAlignment.Left
 
--- Toggle Menu (Ctrl)
-UIS.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == Enum.KeyCode.LeftControl then
-		menuVisible = not menuVisible
-		frame.Visible = menuVisible
-	end
-end)
+local toggleKeyLabel = Instance.new("TextLabel", frame)
+toggleKeyLabel.Position = UDim2.new(0, 10, 0, 75)
+toggleKeyLabel.Size = UDim2.new(1, -20, 0, 25)
+toggleKeyLabel.BackgroundTransparency = 1
+toggleKeyLabel.Text = "Touche Activation: Q"
+toggleKeyLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+toggleKeyLabel.Font = Enum.Font.Gotham
+toggleKeyLabel.TextSize = 16
+toggleKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- Toggle AimLock (Q)
-UIS.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == aimKey then
-		aimlockEnabled = not aimlockEnabled
-		status.Text = "Status: " .. (aimlockEnabled and "ON" or "OFF") .. " (Q)"
-		if not aimlockEnabled then currentTarget = nil end
-	end
-end)
+local instruction = Instance.new("TextLabel", frame)
+instruction.Position = UDim2.new(0, 10, 0, 105)
+instruction.Size = UDim2.new(1, -20, 0, 60)
+instruction.BackgroundTransparency = 1
+instruction.Text = "Clique ici puis appuie sur une touche pour changer la touche d'activation.\nCtrl Droite pour ouvrir/fermer le menu."
+instruction.TextColor3 = Color3.fromRGB(180,180,180)
+instruction.Font = Enum.Font.Gotham
+instruction.TextSize = 14
+instruction.TextXAlignment = Enum.TextXAlignment.Left
 
--- Prédiction
+frame.Visible = menuVisible
+
+-- Fonction pour choisir aléatoirement une partie du corps pour paraître naturel
+local function getTargetPart(character)
+    local parts = {
+        character:FindFirstChild("Head"),
+        character:FindFirstChild("UpperTorso"),
+        character:FindFirstChild("LowerTorso"),
+        character:FindFirstChild("RightUpperArm"),
+        character:FindFirstChild("LeftUpperArm"),
+        character:FindFirstChild("RightUpperLeg"),
+        character:FindFirstChild("LeftUpperLeg"),
+    }
+    local validParts = {}
+    for _, part in pairs(parts) do
+        if part then
+            table.insert(validParts, part)
+        end
+    end
+    if #validParts == 0 then return nil end
+    return validParts[math.random(1, #validParts)]
+end
+
+-- Prédiction simple
 local function getPrediction(part)
-	if not part then return nil end
-	return part.Position + (part.Velocity * prediction)
+    if not part then return nil end
+    return part.Position + (part.Velocity * prediction)
 end
 
--- Trouver le joueur le plus proche du curseur
+-- Vérifier visibilité (raycast)
+local function isVisible(part)
+    local origin = workspace.CurrentCamera.CFrame.Position
+    local direction = (part.Position - origin).Unit * 500
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {player.Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    if result and result.Instance and result.Instance:IsDescendantOf(part.Parent) then
+        return true
+    else
+        return false
+    end
+end
+
+-- Trouver le joueur le plus proche du curseur visible et vivant
 local function getClosestPlayer()
-	local closestDist = math.huge
-	local closestPlayer = nil
+    local closestDist = math.huge
+    local closestPlayer = nil
 
-	for _, p in pairs(Players:GetPlayers()) do
-		if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character:FindFirstChild("HumanoidRootPart") then
-			if p.Character.Humanoid.Health > 0 then
-				local root = p.Character.HumanoidRootPart
-				local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
-				if onScreen then
-					local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-					if dist < closestDist and dist < 250 then
-						closestDist = dist
-						closestPlayer = p
-					end
-				end
-			end
-		end
-	end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character:FindFirstChild("HumanoidRootPart") then
+            local humanoid = p.Character.Humanoid
+            local root = p.Character.HumanoidRootPart
+            if humanoid.Health > 1 and isVisible(root) then
+                local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
+                if onScreen then
+                    local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    if dist < closestDist and dist < 250 then
+                        closestDist = dist
+                        closestPlayer = p
+                    end
+                end
+            end
+        end
+    end
 
-	return closestPlayer
+    return closestPlayer
 end
 
--- Main loop
-RunService.RenderStepped:Connect(function()
-	if aimlockEnabled then
-		if not currentTarget or not currentTarget.Character or currentTarget.Character.Humanoid.Health <= 0 then
-			currentTarget = getClosestPlayer()
-		end
+-- Variables pour rotation smooth
+local camera = workspace.CurrentCamera
+local lerpSpeed = 12 -- plus élevé = rotation plus rapide
 
-		if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
-			local aimPart = currentTarget.Character:FindFirstChild("HumanoidRootPart")
-			local pos = getPrediction(aimPart)
-			if pos then
-				workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, pos)
-			end
-		end
-	end
+local currentCFrame = camera.CFrame
+
+-- Gestion ouverture/fermeture menu (Ctrl droite)
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        menuVisible = not menuVisible
+        frame.Visible = menuVisible
+    end
+end)
+
+-- Gestion changement touche activation
+local waitingForKey = false
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and not waitingForKey then
+        waitingForKey = true
+        toggleKeyLabel.Text = "Appuyez sur une touche..."
+    end
+end)
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if waitingForKey and input.UserInputType == Enum.UserInputType.Keyboard then
+        aimKey = input.KeyCode
+        toggleKeyLabel.Text = "Touche Activation: " .. tostring(aimKey.Name)
+        waitingForKey = false
+    end
+end)
+
+-- Activer/désactiver AimLock avec la touche choisie
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == aimKey then
+        aimlockEnabled = not aimlockEnabled
+        status.Text = "Status: " .. (aimlockEnabled and "ON" or "OFF") .. " (" .. tostring(aimKey.Name) .. ")"
+        if not aimlockEnabled then
+            currentTarget = nil
+        end
+    end
+end)
+
+-- Fonction pour faire une rotation smooth de la caméra vers la cible
+local function smoothLookAt(current, targetPos, delta)
+    local direction = (targetPos - current.Position).Unit
+    local targetCFrame = CFrame.new(current.Position, current.Position + direction)
+    return current:Lerp(targetCFrame, math.clamp(delta * lerpSpeed, 0, 1))
+end
+
+-- Boucle principale
+RunService.RenderStepped:Connect(function(dt)
+    if aimlockEnabled then
+        if not currentTarget or not currentTarget.Character or currentTarget.Character.Humanoid.Health <= 1 then
+            currentTarget = getClosestPlayer()
+        end
+        if currentTarget and currentTarget.Character then
+            local part = getTargetPart(currentTarget.Character)
+            local predictedPos = getPrediction(part)
+            if predictedPos then
+                currentCFrame = smoothLookAt(currentCFrame, predictedPos, dt)
+                camera.CFrame = currentCFrame
+            end
+        end
+    else
+        currentCFrame = camera.CFrame
+    end
 end)
