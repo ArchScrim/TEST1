@@ -1,6 +1,4 @@
--- TriggerBot Da Hood - By ArchScrim
--- Activation menu: RightCtrl | Activation triggerbot: C
-
+-- TriggerBot Da Hood ultra optimisé - By ArchScrim
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -8,49 +6,43 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 
--- Configs ping (prediction, délais)
-local configs = {
-    ["50ms"] = {prediction = 0.045, minDelay = 0.05, maxDelay = 0.07},
-    ["80ms"] = {prediction = 0.07, minDelay = 0.07, maxDelay = 0.1}
-}
-local currentConfig = configs["50ms"]
-
 local triggerEnabled = false
-local menuVisible = true
-local triggerKey = Enum.KeyCode.C
 local toggleMenuKey = Enum.KeyCode.RightControl
-local lastShot = 0
+local triggerKey = Enum.KeyCode.C
+local lastClick = 0
+local clickCooldown = 0.06 -- 60ms entre chaque tir max
 
 local hitParts = {
-    "Head", "UpperTorso", "Torso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
-    "LeftHand", "RightHand", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot"
+    "Head", "UpperTorso", "Torso", "LowerTorso",
+    "LeftUpperArm", "RightUpperArm",
+    "LeftLowerArm", "RightLowerArm",
+    "LeftHand", "RightHand",
+    "LeftUpperLeg", "RightUpperLeg",
+    "LeftLowerLeg", "RightLowerLeg",
+    "LeftFoot", "RightFoot"
 }
 
--- GUI Setup
+-- GUI simplifié
 local gui = Instance.new("ScreenGui", game:GetService("CoreGui"))
 gui.Name = "ArchScrimTriggerBotGUI"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 320, 0, 140)
-frame.Position = UDim2.new(0.5, -160, 0.5, -70)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Size = UDim2.new(0, 300, 0, 110)
+frame.Position = UDim2.new(0.5, -150, 0.5, -55)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 frame.BorderSizePixel = 0
-frame.Visible = menuVisible
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+frame.Visible = true
 
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
 title.Text = "TriggerBot Da Hood - By ArchScrim"
-title.TextColor3 = Color3.fromRGB(200, 200, 200)
+title.TextColor3 = Color3.fromRGB(180, 180, 180)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
 
 local statusLabel = Instance.new("TextLabel", frame)
-statusLabel.Position = UDim2.new(0, 10, 0, 35)
+statusLabel.Position = UDim2.new(0, 10, 0, 40)
 statusLabel.Size = UDim2.new(1, -20, 0, 25)
 statusLabel.BackgroundTransparency = 1
 statusLabel.Text = "Status: OFF (Appuie C)"
@@ -59,107 +51,70 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 16
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local function makeButton(text, pos, callback)
-    local btn = Instance.new("TextButton", frame)
-    btn.Position = pos
-    btn.Size = UDim2.new(0, 140, 0, 30)
-    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    btn.TextColor3 = Color3.fromRGB(230, 230, 230)
-    btn.Text = text
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 16
-    btn.AutoButtonColor = true
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    btn.MouseButton1Click:Connect(callback)
-    return btn
-end
+local infoLabel = Instance.new("TextLabel", frame)
+infoLabel.Position = UDim2.new(0, 10, 1, -30)
+infoLabel.Size = UDim2.new(1, -20, 0, 20)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "Toggle Menu: Right Ctrl | Toggle TriggerBot: C"
+infoLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.TextSize = 14
+infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-makeButton("Config 50ms", UDim2.new(0, 10, 0, 70), function()
-    currentConfig = configs["50ms"]
-end)
-
-makeButton("Config 80ms", UDim2.new(0, 170, 0, 70), function()
-    currentConfig = configs["80ms"]
-end)
-
--- Utilitaires --
-
+-- Fonction pour savoir si on peut voir la hitbox (raycast)
 local function canSee(part)
     local origin = camera.CFrame.Position
-    local direction = (part.Position - origin).Unit * 500
+    local direction = (part.Position - origin)
     local rayParams = RaycastParams.new()
     rayParams.FilterDescendantsInstances = {player.Character}
     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    local raycastResult = workspace:Raycast(origin, direction, rayParams)
-    if raycastResult and raycastResult.Instance and raycastResult.Instance:IsDescendantOf(part.Parent) then
-        return true
-    end
-    return false
+    local rayResult = workspace:Raycast(origin, direction, rayParams)
+    return rayResult and rayResult.Instance and rayResult.Instance:IsDescendantOf(part.Parent)
 end
 
 local function isValidTarget(character)
     if not character then return false end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 3 then
+    if not humanoid or humanoid.Health <= 5 then -- ignore quasi morts
         return false
     end
     return true
 end
 
--- Pour la prédiction simple, on stocke la dernière position et calcule vélocité
-local lastPositions = {}
-local function getVelocity(part, dt)
-    if not lastPositions[part] then
-        lastPositions[part] = part.Position
-        return Vector3.new()
-    end
-    local velocity = (part.Position - lastPositions[part]) / dt
-    lastPositions[part] = part.Position
-    return velocity
-end
+-- Fonction principale TriggerBot ultra rapide et simple
+RunService.Heartbeat:Connect(function()
+    if not triggerEnabled then return end
 
-local function getPredictedPos(part, dt)
-    local velocity = getVelocity(part, dt)
-    return part.Position + velocity * currentConfig.prediction
-end
-
--- Fonction principale du TriggerBot --
-local function triggerBotLogic(dt)
     local mousePos = UIS:GetMouseLocation()
+    local now = tick()
+    if now - lastClick < clickCooldown then return end
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character and isValidTarget(plr.Character) then
             for _, partName in ipairs(hitParts) do
                 local part = plr.Character:FindFirstChild(partName)
                 if part and canSee(part) then
-                    local predictedPos = getPredictedPos(part, dt)
-                    local screenPos, onScreen = camera:WorldToViewportPoint(predictedPos)
+                    local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
                     if onScreen then
-                        local dx = screenPos.X - mousePos.X
-                        local dy = screenPos.Y - mousePos.Y
-                        local dist = math.sqrt(dx*dx + dy*dy)
-                        if dist < 20 then -- tolérance 20 pixels autour du curseur
-                            if tick() - lastShot > currentConfig.minDelay then
-                                lastShot = tick()
-                                mouse1press()
-                                wait(0.02)
-                                mouse1release()
-                                return -- On tire sur la 1ère hitbox valide détectée
-                            end
+                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
+                        if dist <= 15 then -- si la souris touche la hitbox (15px)
+                            lastClick = now
+                            mouse1press()
+                            mouse1release()
+                            return -- éviter plusieurs tirs en même frame
                         end
                     end
                 end
             end
         end
     end
-end
+end)
 
--- Input --
 UIS.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
+
     if input.KeyCode == toggleMenuKey then
-        menuVisible = not menuVisible
-        frame.Visible = menuVisible
+        frame.Visible = not frame.Visible
     elseif input.KeyCode == triggerKey then
         triggerEnabled = not triggerEnabled
         statusLabel.Text = "Status: " .. (triggerEnabled and "ON (C)" or "OFF (C)")
@@ -167,23 +122,11 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Loop principal --
-local lastTime = tick()
-RunService.Heartbeat:Connect(function()
-    local now = tick()
-    local dt = now - lastTime
-    lastTime = now
-
-    if triggerEnabled then
-        triggerBotLogic(dt)
-    end
-end)
-
--- Notification lancement --
+-- Notification simple au lancement
 local function notify(text)
     local notif = Instance.new("TextLabel", gui)
-    notif.Size = UDim2.new(0, 230, 0, 40)
-    notif.Position = UDim2.new(1, -240, 1, -50)
+    notif.Size = UDim2.new(0, 250, 0, 40)
+    notif.Position = UDim2.new(1, -260, 1, -60)
     notif.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     notif.TextColor3 = Color3.fromRGB(100, 255, 100)
     notif.Text = text
@@ -191,9 +134,15 @@ local function notify(text)
     notif.TextSize = 18
     notif.TextWrapped = true
     notif.BorderSizePixel = 0
+    notif.ZIndex = 12
     Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 10)
+
+    notif.BackgroundTransparency = 1
+    notif:TweenPosition(UDim2.new(1, -260, 1, -90), "Out", "Quad", 0.5, true)
+    notif:TweenSize(UDim2.new(0, 250, 0, 40), "Out", "Quad", 0.5, true)
     wait(3)
     notif:Destroy()
 end
 
 notify("TriggerBot prêt - By ArchScrim")
+
