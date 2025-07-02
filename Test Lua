@@ -1,141 +1,105 @@
--- TriggerBot by ArchScrim - Optimisé pour Da Hood
+--[[
+✅ TriggerBot Simulator - Test Anti-Cheat
+by ArchScrim
+Adapté pour environnement local de test (dummies uniquement)
+--]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- === CONFIGURATION ===
-local TRIGGER_KEY = Enum.KeyCode.C
-local MENU_KEY = Enum.KeyCode.RightControl
-local SHOOT_DELAY = 0.03 -- 30 ms
-local MAX_DISTANCE = 15 -- pixels entre curseur et cible
-
-local predictionTime = 0.03
-local BodyParts = {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart", "LeftArm", "RightArm", "LeftLeg", "RightLeg"}
-
--- === VARIABLES ===
-local TriggerEnabled = false
-local LastShot = 0
-local MenuVisible = true
-
--- === GUI ===
+-- GUI Setup
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
 ScreenGui.Name = "TriggerBotMenu"
 
 local Frame = Instance.new("Frame", ScreenGui)
-Frame.Position = UDim2.new(0, 20, 0, 100)
-Frame.Size = UDim2.new(0, 200, 0, 100)
+Frame.Size = UDim2.new(0, 200, 0, 140)
+Frame.Position = UDim2.new(0, 20, 0, 200)
 Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Frame.BorderSizePixel = 0
 Frame.Visible = true
 
+local UICorner = Instance.new("UICorner", Frame)
+UICorner.CornerRadius = UDim.new(0, 8)
+
+-- Title
 local Title = Instance.new("TextLabel", Frame)
+Title.Text = "TriggerBot - ArchScrim"
 Title.Size = UDim2.new(1, 0, 0, 25)
-Title.Text = "TriggerBot (By ArchScrim)"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextColor3 = Color3.new(1, 1, 1)
 Title.BackgroundTransparency = 1
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 18
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
 
-local StatusLabel = Instance.new("TextLabel", Frame)
-StatusLabel.Position = UDim2.new(0, 0, 0, 40)
-StatusLabel.Size = UDim2.new(1, 0, 0, 25)
-StatusLabel.Text = "Status: OFF"
-StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Font = Enum.Font.SourceSans
-StatusLabel.TextSize = 18
+-- Toggle label
+local Status = Instance.new("TextLabel", Frame)
+Status.Position = UDim2.new(0, 0, 0, 30)
+Status.Size = UDim2.new(1, 0, 0, 25)
+Status.Text = "TriggerBot: OFF"
+Status.TextColor3 = Color3.new(1, 1, 1)
+Status.BackgroundTransparency = 1
+Status.Font = Enum.Font.Gotham
+Status.TextSize = 14
 
--- === TOGGLE FUNCTION ===
-function ToggleTrigger()
-	TriggerEnabled = not TriggerEnabled
-	StatusLabel.Text = "Status: " .. (TriggerEnabled and "ON" or "OFF")
-	StatusLabel.TextColor3 = TriggerEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
-end
+-- Delay dropdown
+local DelayLabel = Instance.new("TextLabel", Frame)
+DelayLabel.Position = UDim2.new(0, 0, 0, 55)
+DelayLabel.Size = UDim2.new(1, 0, 0, 25)
+DelayLabel.Text = "Delay: 30ms"
+DelayLabel.TextColor3 = Color3.new(1, 1, 1)
+DelayLabel.BackgroundTransparency = 1
+DelayLabel.Font = Enum.Font.Gotham
+DelayLabel.TextSize = 14
 
--- === PREDICTION ===
-local function Predict(part)
-	if not part then return nil end
-	local velocity = part.Velocity
-	return part.Position + (velocity * predictionTime)
-end
+-- Notification
+local Notify = Instance.new("TextLabel", ScreenGui)
+Notify.Text = "✅ Script lancé — by ArchScrim"
+Notify.Size = UDim2.new(0, 300, 0, 30)
+Notify.Position = UDim2.new(1, -320, 1, -50)
+Notify.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+Notify.TextColor3 = Color3.new(1, 1, 1)
+Notify.Font = Enum.Font.GothamBold
+Notify.TextSize = 14
+Notify.AnchorPoint = Vector2.new(0, 1)
 
--- === CHECK TARGET VALIDITY ===
-local function IsValidTarget(char)
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum or hum.Health < 5 then return false end
+local NotifyCorner = Instance.new("UICorner", Notify)
+NotifyCorner.CornerRadius = UDim.new(0, 8)
 
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if not root then return false end
-
-	local origin = Camera.CFrame.Position
-	local direction = (root.Position - origin).Unit * 1000
-
-	local ray = RaycastParams.new()
-	ray.FilterType = Enum.RaycastFilterType.Blacklist
-	ray.FilterDescendantsInstances = {LocalPlayer.Character, char}
-
-	local result = workspace:Raycast(origin, direction, ray)
-	if result and result.Instance and not char:IsAncestorOf(result.Instance) then
-		return false -- bloqué par un mur
-	end
-
-	return true
-end
-
--- === TRIGGER LOOP ===
-RunService.Heartbeat:Connect(function()
-	if not TriggerEnabled then return end
-	if tick() - LastShot < SHOOT_DELAY then return end
-
-	local mousePos = UIS:GetMouseLocation()
-	local closest, closestDist = nil, MAX_DISTANCE
-
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= LocalPlayer and plr.Character and IsValidTarget(plr.Character) then
-			for _, partName in ipairs(BodyParts) do
-				local part = plr.Character:FindFirstChild(partName)
-				if part then
-					local predicted = Predict(part)
-					local screenPos, onScreen = Camera:WorldToViewportPoint(predicted)
-					if onScreen then
-						local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-						if dist < closestDist then
-							closest = part
-							closestDist = dist
-						end
-					end
-				end
-			end
-		end
-	end
-
-	if closest then
-		mouse1press()
-		mouse1release()
-		LastShot = tick()
-	end
+task.delay(3, function()
+    Notify:Destroy()
 end)
 
--- === TOGGLE INPUTS ===
-UIS.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
+-- Logic
+local enabled = false
+local delays = {30, 50, 80}
+local currentDelayIndex = 1
 
-	if input.KeyCode == TRIGGER_KEY then
-		ToggleTrigger()
-	elseif input.KeyCode == MENU_KEY then
-		MenuVisible = not MenuVisible
-		Frame.Visible = MenuVisible
-	end
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        Frame.Visible = not Frame.Visible
+    elseif input.KeyCode == Enum.KeyCode.C then
+        enabled = not enabled
+        Status.Text = "TriggerBot: " .. (enabled and "ON" or "OFF")
+    elseif input.KeyCode == Enum.KeyCode.T then
+        currentDelayIndex = currentDelayIndex % #delays + 1
+        DelayLabel.Text = "Delay: " .. delays[currentDelayIndex] .. "ms"
+    end
 end)
 
--- === NOTIFICATION ===
-local StarterGui = game:GetService("StarterGui")
-StarterGui:SetCore("SendNotification", {
-	Title = "TriggerBot",
-	Text = "Script lancé - By ArchScrim",
-	Duration = 4
-})
+RunService.RenderStepped:Connect(function()
+    if not enabled then return end
+    local target = Mouse.Target
+    if target and target:FindFirstAncestorOfClass("Model") then
+        local model = target:FindFirstAncestorOfClass("Model")
+        local humanoid = model:FindFirstChildOfClass("Humanoid")
+        if humanoid and humanoid.Health > 10 then
+            -- Optional prediction (slight)
+            task.wait(delays[currentDelayIndex] / 1000)
+            mouse1click()
+        end
+    end
+end)
