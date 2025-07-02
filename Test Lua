@@ -6,12 +6,13 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 -- Variables
-local triggerEnabled = false      -- Menu et triggerbot activé/désactivé (toggle Ctrl droit)
-local triggerActive = false       -- Tir actif uniquement quand on maintient la touche C
-local toggleMenuKey = Enum.KeyCode.RightControl
-local triggerKey = Enum.KeyCode.C
+local triggerEnabled = true       -- TriggerBot actif par défaut à l'injection
+local menuVisible = true          -- Menu visible au lancement
 
-local checkInterval = 0.1         -- Vérification toutes les 100 ms pour réduire lag
+local toggleMenuKey = Enum.KeyCode.RightControl -- Toggle affichage menu
+local triggerToggleKey = Enum.KeyCode.C         -- Toggle triggerbot on/off
+
+local checkInterval = 0.1         -- Vérification toutes les 100 ms
 local lastCheck = 0
 local clickCooldown = 0.1         -- 100 ms entre clics
 local lastClick = 0
@@ -40,7 +41,7 @@ Frame.Size = UDim2.new(0, 270, 0, 130)
 Frame.Position = UDim2.new(0, 10, 0, 10)
 Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Frame.BorderSizePixel = 0
-Frame.Visible = false
+Frame.Visible = menuVisible
 Frame.Parent = ScreenGui
 
 local Title = Instance.new("TextLabel")
@@ -59,7 +60,7 @@ StatusLabel.BackgroundTransparency = 1
 StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
 StatusLabel.TextScaled = true
 StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.Text = "Status: OFF"
+StatusLabel.Text = "Status: ON"
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatusLabel.Parent = Frame
 
@@ -153,25 +154,19 @@ end
 UIS.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.KeyCode == toggleMenuKey then
+		menuVisible = not menuVisible
+		Frame.Visible = menuVisible
+	end
+	if input.KeyCode == triggerToggleKey then
 		triggerEnabled = not triggerEnabled
-		Frame.Visible = triggerEnabled
 		StatusLabel.Text = "Status: "..(triggerEnabled and "ON" or "OFF")
-	end
-	if input.KeyCode == triggerKey then
-		triggerActive = true
-	end
-end)
-
-UIS.InputEnded:Connect(function(input)
-	if input.KeyCode == triggerKey then
-		triggerActive = false
 	end
 end)
 
 -- Main loop
 
 RunService.Heartbeat:Connect(function()
-	if not triggerEnabled or not triggerActive then return end
+	if not triggerEnabled then return end
 	local now = tick()
 	if now - lastCheck < checkInterval then return end
 	lastCheck = now
