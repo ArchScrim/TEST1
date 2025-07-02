@@ -1,9 +1,7 @@
---[[
-✅ TriggerBot Simulator - Test Anti-Cheat
-by ArchScrim
-Adapté pour environnement local de test (dummies uniquement)
---]]
+-- ✅ TriggerBot Simulator - Anti-Cheat Testing
+-- by ArchScrim | Fait pour dummy/NPC, sans lock, ni cheat
 
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,95 +9,89 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
 -- GUI Setup
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-ScreenGui.Name = "TriggerBotMenu"
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "TriggerBot_GUI"
 
-local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0, 200, 0, 140)
-Frame.Position = UDim2.new(0, 20, 0, 200)
-Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Frame.BorderSizePixel = 0
-Frame.Visible = true
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 220, 0, 140)
+frame.Position = UDim2.new(0, 20, 0, 200)
+frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+frame.BorderSizePixel = 0
+frame.Visible = true
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
-local UICorner = Instance.new("UICorner", Frame)
-UICorner.CornerRadius = UDim.new(0, 8)
+local title = Instance.new("TextLabel", frame)
+title.Text = "TriggerBot - by ArchScrim"
+title.Size = UDim2.new(1, 0, 0, 25)
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
 
--- Title
-local Title = Instance.new("TextLabel", Frame)
-Title.Text = "TriggerBot - ArchScrim"
-Title.Size = UDim2.new(1, 0, 0, 25)
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.BackgroundTransparency = 1
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 14
+local status = Instance.new("TextLabel", frame)
+status.Position = UDim2.new(0, 0, 0, 30)
+status.Size = UDim2.new(1, 0, 0, 20)
+status.Text = "Status: OFF"
+status.TextColor3 = Color3.new(1, 1, 1)
+status.BackgroundTransparency = 1
+status.Font = Enum.Font.Gotham
+status.TextSize = 13
 
--- Toggle label
-local Status = Instance.new("TextLabel", Frame)
-Status.Position = UDim2.new(0, 0, 0, 30)
-Status.Size = UDim2.new(1, 0, 0, 25)
-Status.Text = "TriggerBot: OFF"
-Status.TextColor3 = Color3.new(1, 1, 1)
-Status.BackgroundTransparency = 1
-Status.Font = Enum.Font.Gotham
-Status.TextSize = 14
+local delayText = Instance.new("TextLabel", frame)
+delayText.Position = UDim2.new(0, 0, 0, 55)
+delayText.Size = UDim2.new(1, 0, 0, 20)
+delayText.Text = "Delay: 30 ms"
+delayText.TextColor3 = Color3.new(1, 1, 1)
+delayText.BackgroundTransparency = 1
+delayText.Font = Enum.Font.Gotham
+delayText.TextSize = 13
 
--- Delay dropdown
-local DelayLabel = Instance.new("TextLabel", Frame)
-DelayLabel.Position = UDim2.new(0, 0, 0, 55)
-DelayLabel.Size = UDim2.new(1, 0, 0, 25)
-DelayLabel.Text = "Delay: 30ms"
-DelayLabel.TextColor3 = Color3.new(1, 1, 1)
-DelayLabel.BackgroundTransparency = 1
-DelayLabel.Font = Enum.Font.Gotham
-DelayLabel.TextSize = 14
-
--- Notification
-local Notify = Instance.new("TextLabel", ScreenGui)
-Notify.Text = "✅ Script lancé — by ArchScrim"
-Notify.Size = UDim2.new(0, 300, 0, 30)
-Notify.Position = UDim2.new(1, -320, 1, -50)
-Notify.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-Notify.TextColor3 = Color3.new(1, 1, 1)
-Notify.Font = Enum.Font.GothamBold
-Notify.TextSize = 14
-Notify.AnchorPoint = Vector2.new(0, 1)
-
-local NotifyCorner = Instance.new("UICorner", Notify)
-NotifyCorner.CornerRadius = UDim.new(0, 8)
-
-task.delay(3, function()
-    Notify:Destroy()
-end)
+local notif = Instance.new("TextLabel", gui)
+notif.Size = UDim2.new(0, 280, 0, 28)
+notif.Position = UDim2.new(1, -290, 1, -50)
+notif.AnchorPoint = Vector2.new(0, 1)
+notif.BackgroundColor3 = Color3.fromRGB(30, 180, 90)
+notif.Text = "✅ Script lancé — by ArchScrim"
+notif.TextColor3 = Color3.new(1, 1, 1)
+notif.Font = Enum.Font.GothamBold
+notif.TextSize = 13
+Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 8)
+task.delay(3, function() notif:Destroy() end)
 
 -- Logic
 local enabled = false
 local delays = {30, 50, 80}
 local currentDelayIndex = 1
 
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-
-    if input.KeyCode == Enum.KeyCode.RightControl then
-        Frame.Visible = not Frame.Visible
-    elseif input.KeyCode == Enum.KeyCode.C then
-        enabled = not enabled
-        Status.Text = "TriggerBot: " .. (enabled and "ON" or "OFF")
-    elseif input.KeyCode == Enum.KeyCode.T then
-        currentDelayIndex = currentDelayIndex % #delays + 1
-        DelayLabel.Text = "Delay: " .. delays[currentDelayIndex] .. "ms"
-    end
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.C then
+		enabled = not enabled
+		status.Text = "Status: " .. (enabled and "ON" or "OFF")
+	elseif input.KeyCode == Enum.KeyCode.T then
+		currentDelayIndex = (currentDelayIndex % #delays) + 1
+		delayText.Text = "Delay: " .. delays[currentDelayIndex] .. " ms"
+	elseif input.KeyCode == Enum.KeyCode.RightControl then
+		frame.Visible = not frame.Visible
+	end
 end)
 
+-- TriggerBot loop
 RunService.RenderStepped:Connect(function()
-    if not enabled then return end
-    local target = Mouse.Target
-    if target and target:FindFirstAncestorOfClass("Model") then
-        local model = target:FindFirstAncestorOfClass("Model")
-        local humanoid = model:FindFirstChildOfClass("Humanoid")
-        if humanoid and humanoid.Health > 10 then
-            -- Optional prediction (slight)
-            task.wait(delays[currentDelayIndex] / 1000)
-            mouse1click()
-        end
-    end
+	if not enabled then return end
+	local target = Mouse.Target
+	if not target then return end
+
+	-- Ignore ForceFields or non-humanoids
+	if string.lower(target.Name):find("forcefield") then return end
+	local model = target:FindFirstAncestorOfClass("Model")
+	if not model then return end
+
+	local humanoid = model:FindFirstChildWhichIsA("Humanoid")
+	if not humanoid or humanoid.Health <= 10 then return end
+
+	-- Fire with delay
+	task.delay(delays[currentDelayIndex] / 1000, function()
+		pcall(mouse1click)
+	end)
 end)
