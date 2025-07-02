@@ -1,4 +1,4 @@
--- TriggerBot avancé by ArchScrim
+-- TriggerBot optimisé by ArchScrim
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -6,45 +6,55 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- GUI setup
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "TriggerBotGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("CoreGui")
 
-local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0, 240, 0, 140)
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 260, 0, 120)
 Frame.Position = UDim2.new(0, 20, 0, 200)
 Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Frame.BorderSizePixel = 0
 Frame.Visible = true
-Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 8)
+Frame.Parent = ScreenGui
 
-local Title = Instance.new("TextLabel", Frame)
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
 Title.Text = "TriggerBot - by ArchScrim"
 Title.Size = UDim2.new(1, 0, 0, 30)
 Title.BackgroundTransparency = 1
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 16
+Title.TextSize = 17
+Title.Parent = Frame
 
-local StatusLabel = Instance.new("TextLabel", Frame)
-StatusLabel.Position = UDim2.new(0, 0, 0, 35)
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Position = UDim2.new(0, 0, 0, 45)
 StatusLabel.Size = UDim2.new(1, 0, 0, 25)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.TextSize = 14
+StatusLabel.TextSize = 15
 StatusLabel.Text = "Status: OFF"
+StatusLabel.Parent = Frame
 
-local DelayLabel = Instance.new("TextLabel", Frame)
-DelayLabel.Position = UDim2.new(0, 0, 0, 65)
-DelayLabel.Size = UDim2.new(1, 0, 0, 25)
-DelayLabel.BackgroundTransparency = 1
-DelayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-DelayLabel.Font = Enum.Font.Gotham
-DelayLabel.TextSize = 14
-DelayLabel.Text = "Delay: 30 ms"
+local InfoLabel = Instance.new("TextLabel")
+InfoLabel.Position = UDim2.new(0, 0, 0, 75)
+InfoLabel.Size = UDim2.new(1, 0, 0, 20)
+InfoLabel.BackgroundTransparency = 1
+InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+InfoLabel.Font = Enum.Font.Gotham
+InfoLabel.TextSize = 13
+InfoLabel.Text = "Toggle avec C - Menu avec Right Ctrl"
+InfoLabel.Parent = Frame
 
-local Notification = Instance.new("TextLabel", ScreenGui)
+-- Notification
+local Notification = Instance.new("TextLabel")
 Notification.Size = UDim2.new(0, 280, 0, 28)
 Notification.Position = UDim2.new(1, -290, 1, -50)
 Notification.AnchorPoint = Vector2.new(0, 1)
@@ -53,59 +63,63 @@ Notification.Text = "✅ Script lancé — by ArchScrim"
 Notification.TextColor3 = Color3.new(1,1,1)
 Notification.Font = Enum.Font.GothamBold
 Notification.TextSize = 14
-Instance.new("UICorner", Notification).CornerRadius = UDim.new(0,8)
+Notification.Parent = ScreenGui
+local notifCorner = Instance.new("UICorner")
+notifCorner.CornerRadius = UDim.new(0, 8)
+notifCorner.Parent = Notification
 
-task.delay(3, function() Notification:Destroy() end)
-
--- Variables
-local enabled = false
-local delays = {30, 50, 80}
-local delayIndex = 1
-local lastClick = 0
-
--- Input handlers
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.RightControl then
-        Frame.Visible = not Frame.Visible
-    elseif input.KeyCode == Enum.KeyCode.C then
-        enabled = not enabled
-        StatusLabel.Text = "Status: " .. (enabled and "ON" or "OFF")
-    elseif input.KeyCode == Enum.KeyCode.T then
-        delayIndex = delayIndex % #delays + 1
-        DelayLabel.Text = "Delay: " .. delays[delayIndex] .. " ms"
+task.delay(3, function()
+    if Notification and Notification.Parent then
+        Notification:Destroy()
     end
 end)
 
--- Helper: check if a part is valid target
-local function isValidPart(part)
-    if not part then return false end
-    local nameLower = part.Name:lower()
-    if nameLower:find("forcefield") then return false end
+-- Variables
+local enabled = false
+local debounceTime = 0.03 -- 30ms
+local lastClick = 0
+
+-- Check if part is a valid target
+local function isValidTarget(part)
+    if not part or not part:IsA("BasePart") then return false end
+
     local model = part:FindFirstAncestorOfClass("Model")
     if not model then return false end
-    local humanoid = model:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return false end
-    if humanoid.Health <= 10 then return false end
+    if model == LocalPlayer.Character then return false end
 
-    -- Check for ForceField on model (to detect shield)
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 10 then return false end
+
+    -- Ignore if model has ForceField (shield)
     if model:FindFirstChildOfClass("ForceField") then return false end
 
     return true
 end
 
--- Main TriggerBot loop
+-- Main loop
 RunService.RenderStepped:Connect(function()
     if not enabled then return end
 
-    local target = Mouse.Target
-    if not isValidPart(target) then return end
+    local targetPart = Mouse.Target
+    if not isValidTarget(targetPart) then return end
 
     local now = tick()
-    local delaySec = delays[delayIndex] / 1000
-
-    if now - lastClick >= delaySec then
+    if now - lastClick >= debounceTime then
         lastClick = now
-        pcall(mouse1click)
+        pcall(function()
+            mouse1click()
+        end)
+    end
+end)
+
+-- Input handling
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        Frame.Visible = not Frame.Visible
+    elseif input.KeyCode == Enum.KeyCode.C then
+        enabled = not enabled
+        StatusLabel.Text = "Status: " .. (enabled and "ON" or "OFF")
     end
 end)
