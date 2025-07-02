@@ -1,29 +1,37 @@
--- TriggerBot by ChatGPT x Xeno compatible
--- Usage: C pour activer/désactiver - Ctrl pour ouvrir/fermer menu
+-- AimLock by ArchScrim x ChatGPT - Compatible Xeno
+-- Touche Q pour lock | Ctrl pour ouvrir/fermer le menu
 
--- Sécurité et chargement
 local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
 local player = Players.LocalPlayer
+local mouse = player:GetMouse()
 
-repeat wait() until player and player.Character and player:FindFirstChild("PlayerGui")
+repeat wait() until player.Character and player:FindFirstChild("PlayerGui")
 
--- Variables
-local triggerEnabled = false
-local triggerDelay = 0.05
-local pingPrediction = 0.06
+-- ✅ Notification de lancement
+StarterGui:SetCore("SendNotification", {
+	Title = "ArchScrim",
+	Text = "Script lancé avec succès",
+	Duration = 5
+})
+
+-- AimLock Variables
+local aimlockEnabled = false
+local aimKey = Enum.KeyCode.Q
+local prediction = 0.06
+local currentTarget = nil
 local menuVisible = true
 
--- Création du GUI dans CoreGui (compatibilité Xeno)
+-- UI dans CoreGui (compatible Xeno)
 local gui = Instance.new("ScreenGui")
-gui.Name = "TriggerBotMenu"
+gui.Name = "AimLockMenu"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = game:GetService("CoreGui")
 
--- Cadre principal
 local frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 280, 0, 160)
 frame.Position = UDim2.new(0.5, -140, 0.5, -80)
@@ -34,21 +42,21 @@ Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1, 0, 0, 40)
 title.BackgroundTransparency = 1
-title.Text = "TriggerBot Da Hood Style"
+title.Text = "AimLock System"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
 
 local status = Instance.new("TextLabel", frame)
 status.Position = UDim2.new(0, 0, 0, 40)
-status.Size = UDim2.new(1, 0, 0, 40)
+status.Size = UDim2.new(1, 0, 0, 30)
 status.BackgroundTransparency = 1
-status.Text = "Status: OFF (press C)"
+status.Text = "Status: OFF (Q)"
 status.TextColor3 = Color3.new(1, 1, 1)
 status.Font = Enum.Font.Gotham
 status.TextSize = 16
 
--- Toggle menu (Ctrl)
+-- Toggle Menu (Ctrl)
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.KeyCode == Enum.KeyCode.LeftControl then
@@ -57,58 +65,58 @@ UIS.InputBegan:Connect(function(input, gp)
 	end
 end)
 
--- Toggle TriggerBot (C)
+-- Toggle AimLock (Q)
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
-	if input.KeyCode == Enum.KeyCode.C then
-		triggerEnabled = not triggerEnabled
-		status.Text = "Status: " .. (triggerEnabled and "ON" or "OFF") .. " (press C)"
+	if input.KeyCode == aimKey then
+		aimlockEnabled = not aimlockEnabled
+		status.Text = "Status: " .. (aimlockEnabled and "ON" or "OFF") .. " (Q)"
+		if not aimlockEnabled then currentTarget = nil end
 	end
 end)
 
--- Fonction prédiction simple
-local function predict(root)
-	if not root then return nil end
-	return root.Position + (root.Velocity * pingPrediction)
-end
-
--- Détection de joueur visé
-local function getTarget()
-	local mouse = player:GetMouse()
-	local part = mouse.Target
+-- Prédiction
+local function getPrediction(part)
 	if not part then return nil end
-	local model = part:FindFirstAncestorOfClass("Model")
-	if not model then return nil end
-	local humanoid = model:FindFirstChildWhichIsA("Humanoid")
-	local root = model:FindFirstChild("HumanoidRootPart")
-	if humanoid and humanoid.Health > 0 and root and Players:GetPlayerFromCharacter(model) ~= player then
-		return root
-	end
-	return nil
+	return part.Position + (part.Velocity * prediction)
 end
 
--- Arme
-local function fire()
-	local char = player.Character
-	if not char then return end
-	local tool = char:FindFirstChildOfClass("Tool")
-	if tool and tool:FindFirstChild("Activate") then
-		tool:Activate()
+-- Trouver le joueur le plus proche du curseur
+local function getClosestPlayer()
+	local closestDist = math.huge
+	local closestPlayer = nil
+
+	for _, p in pairs(Players:GetPlayers()) do
+		if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character:FindFirstChild("HumanoidRootPart") then
+			if p.Character.Humanoid.Health > 0 then
+				local root = p.Character.HumanoidRootPart
+				local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
+				if onScreen then
+					local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+					if dist < closestDist and dist < 250 then
+						closestDist = dist
+						closestPlayer = p
+					end
+				end
+			end
+		end
 	end
+
+	return closestPlayer
 end
 
--- Loop principal
+-- Main loop
 RunService.RenderStepped:Connect(function()
-	if not triggerEnabled then return end
-	local target = getTarget()
-	if target then
-		local cam = workspace.CurrentCamera
-		local predicted = predict(target)
-		if predicted then
-			cam.CFrame = CFrame.new(cam.CFrame.Position, predicted)
-			task.wait(triggerDelay)
-			if getTarget() then
-				fire()
+	if aimlockEnabled then
+		if not currentTarget or not currentTarget.Character or currentTarget.Character.Humanoid.Health <= 0 then
+			currentTarget = getClosestPlayer()
+		end
+
+		if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
+			local aimPart = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+			local pos = getPrediction(aimPart)
+			if pos then
+				workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, pos)
 			end
 		end
 	end
