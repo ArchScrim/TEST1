@@ -1,2 +1,81 @@
---hi
-print("ei")
+-- GUI Anti-Cheat Test Menu (TriggerBot Fake) - For Da Hood-style testing
+-- LocalScript, StarterPlayerScripts
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "ExploitMenu"
+screenGui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 300, 0, 400)
+frame.Position = UDim2.new(0.5, -150, 0.5, -200)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Visible = false
+
+local uiCorner = Instance.new("UICorner", frame)
+uiCorner.CornerRadius = UDim.new(0, 8)
+
+local title = Instance.new("TextLabel", frame)
+title.Text = "Exploit Menu (TEST)"
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+
+-- Button Generator Function
+local function createButton(text, callback)
+	local btn = Instance.new("TextButton", frame)
+	btn.Size = UDim2.new(1, -20, 0, 40)
+	btn.Position = UDim2.new(0, 10, 0, #frame:GetChildren() * 45)
+	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.Gotham
+	btn.TextSize = 16
+	btn.Text = text
+
+	local corner = Instance.new("UICorner", btn)
+	corner.CornerRadius = UDim.new(0, 6)
+
+	btn.MouseButton1Click:Connect(callback)
+end
+
+-- Fake Exploit Options
+createButton("Speed Hack (Fake)", function()
+	print("Speed Hack Activated (Test)")
+end)
+
+createButton("Fly Mode (Fake)", function()
+	print("Fly Mode Activated (Test)")
+end)
+
+createButton("Noclip (Fake)", function()
+	print("Noclip Activated (Test)")
+end)
+
+createButton("TriggerBot (Da Hood Style)", function()
+	print("TriggerBot Activated (Fake)")
+	-- Simulation only
+	local function checkTarget()
+		local mouse = player:GetMouse()
+		local target = mouse.Target
+		if target and target.Parent:FindFirstChild("Humanoid") then
+			print("TriggerBot Detected Target: " .. target.Parent.Name)
+			-- No damage or interaction – simulation only
+		end
+	end
+	checkTarget()
+end)
+
+-- Menu Toggle (CTRL key)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.LeftControl then
+		frame.Visible = not frame.Visible
+	end
+end)
