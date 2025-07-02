@@ -1,97 +1,108 @@
--- ✅ TriggerBot Simulator - Anti-Cheat Testing
--- by ArchScrim | Fait pour dummy/NPC, sans lock, ni cheat
+-- TriggerBot avancé by ArchScrim
 
--- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- GUI Setup
-local gui = Instance.new("ScreenGui", game.CoreGui)
-gui.Name = "TriggerBot_GUI"
+-- GUI setup
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "TriggerBotGUI"
 
-local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 220, 0, 140)
-frame.Position = UDim2.new(0, 20, 0, 200)
-frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-frame.BorderSizePixel = 0
-frame.Visible = true
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0, 240, 0, 140)
+Frame.Position = UDim2.new(0, 20, 0, 200)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.BorderSizePixel = 0
+Frame.Visible = true
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 8)
 
-local title = Instance.new("TextLabel", frame)
-title.Text = "TriggerBot - by ArchScrim"
-title.Size = UDim2.new(1, 0, 0, 25)
-title.BackgroundTransparency = 1
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 14
+local Title = Instance.new("TextLabel", Frame)
+Title.Text = "TriggerBot - by ArchScrim"
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
 
-local status = Instance.new("TextLabel", frame)
-status.Position = UDim2.new(0, 0, 0, 30)
-status.Size = UDim2.new(1, 0, 0, 20)
-status.Text = "Status: OFF"
-status.TextColor3 = Color3.new(1, 1, 1)
-status.BackgroundTransparency = 1
-status.Font = Enum.Font.Gotham
-status.TextSize = 13
+local StatusLabel = Instance.new("TextLabel", Frame)
+StatusLabel.Position = UDim2.new(0, 0, 0, 35)
+StatusLabel.Size = UDim2.new(1, 0, 0, 25)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.TextSize = 14
+StatusLabel.Text = "Status: OFF"
 
-local delayText = Instance.new("TextLabel", frame)
-delayText.Position = UDim2.new(0, 0, 0, 55)
-delayText.Size = UDim2.new(1, 0, 0, 20)
-delayText.Text = "Delay: 30 ms"
-delayText.TextColor3 = Color3.new(1, 1, 1)
-delayText.BackgroundTransparency = 1
-delayText.Font = Enum.Font.Gotham
-delayText.TextSize = 13
+local DelayLabel = Instance.new("TextLabel", Frame)
+DelayLabel.Position = UDim2.new(0, 0, 0, 65)
+DelayLabel.Size = UDim2.new(1, 0, 0, 25)
+DelayLabel.BackgroundTransparency = 1
+DelayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+DelayLabel.Font = Enum.Font.Gotham
+DelayLabel.TextSize = 14
+DelayLabel.Text = "Delay: 30 ms"
 
-local notif = Instance.new("TextLabel", gui)
-notif.Size = UDim2.new(0, 280, 0, 28)
-notif.Position = UDim2.new(1, -290, 1, -50)
-notif.AnchorPoint = Vector2.new(0, 1)
-notif.BackgroundColor3 = Color3.fromRGB(30, 180, 90)
-notif.Text = "✅ Script lancé — by ArchScrim"
-notif.TextColor3 = Color3.new(1, 1, 1)
-notif.Font = Enum.Font.GothamBold
-notif.TextSize = 13
-Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 8)
-task.delay(3, function() notif:Destroy() end)
+local Notification = Instance.new("TextLabel", ScreenGui)
+Notification.Size = UDim2.new(0, 280, 0, 28)
+Notification.Position = UDim2.new(1, -290, 1, -50)
+Notification.AnchorPoint = Vector2.new(0, 1)
+Notification.BackgroundColor3 = Color3.fromRGB(40, 180, 90)
+Notification.Text = "✅ Script lancé — by ArchScrim"
+Notification.TextColor3 = Color3.new(1,1,1)
+Notification.Font = Enum.Font.GothamBold
+Notification.TextSize = 14
+Instance.new("UICorner", Notification).CornerRadius = UDim.new(0,8)
 
--- Logic
+task.delay(3, function() Notification:Destroy() end)
+
+-- Variables
 local enabled = false
 local delays = {30, 50, 80}
-local currentDelayIndex = 1
+local delayIndex = 1
+local lastClick = 0
 
-UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == Enum.KeyCode.C then
-		enabled = not enabled
-		status.Text = "Status: " .. (enabled and "ON" or "OFF")
-	elseif input.KeyCode == Enum.KeyCode.T then
-		currentDelayIndex = (currentDelayIndex % #delays) + 1
-		delayText.Text = "Delay: " .. delays[currentDelayIndex] .. " ms"
-	elseif input.KeyCode == Enum.KeyCode.RightControl then
-		frame.Visible = not frame.Visible
-	end
+-- Input handlers
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        Frame.Visible = not Frame.Visible
+    elseif input.KeyCode == Enum.KeyCode.C then
+        enabled = not enabled
+        StatusLabel.Text = "Status: " .. (enabled and "ON" or "OFF")
+    elseif input.KeyCode == Enum.KeyCode.T then
+        delayIndex = delayIndex % #delays + 1
+        DelayLabel.Text = "Delay: " .. delays[delayIndex] .. " ms"
+    end
 end)
 
--- TriggerBot loop
+-- Helper: Check if a part is valid target part
+local function isValidPart(part)
+    if not part then return false end
+    local nameLower = part.Name:lower()
+    if nameLower:find("forcefield") then return false end
+    local model = part:FindFirstAncestorOfClass("Model")
+    if not model then return false end
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    if humanoid.Health <= 10 then return false end
+    return true
+end
+
+-- Main TriggerBot loop
 RunService.RenderStepped:Connect(function()
-	if not enabled then return end
-	local target = Mouse.Target
-	if not target then return end
+    if not enabled then return end
 
-	-- Ignore ForceFields or non-humanoids
-	if string.lower(target.Name):find("forcefield") then return end
-	local model = target:FindFirstAncestorOfClass("Model")
-	if not model then return end
+    local target = Mouse.Target
+    if not isValidPart(target) then return end
 
-	local humanoid = model:FindFirstChildWhichIsA("Humanoid")
-	if not humanoid or humanoid.Health <= 10 then return end
+    local now = tick()
+    local delaySec = delays[delayIndex] / 1000
 
-	-- Fire with delay
-	task.delay(delays[currentDelayIndex] / 1000, function()
-		pcall(mouse1click)
-	end)
+    if now - lastClick >= delaySec then
+        lastClick = now
+        -- Click instantly when cursor touches hitbox
+        pcall(mouse1click)
+    end
 end)
