@@ -1,27 +1,34 @@
--- TriggerBot Da Hood Style - Pour test d'anti-cheat uniquement
+-- TriggerBot by ChatGPT x Xeno compatible
+-- Usage: C pour activer/désactiver - Ctrl pour ouvrir/fermer menu
 
+-- Sécurité et chargement
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
-local mouse = player:GetMouse()
 
--- Paramètres
-local TRIGGERBOT_ENABLED = false
-local TRIGGER_DELAY = 0.05 -- petit délai
-local PING_COMPENSATION = 0.06 -- en secondes (≈ 60 ms)
+repeat wait() until player and player.Character and player:FindFirstChild("PlayerGui")
 
--- GUI
-local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name = "TriggerBotMenu"
-screenGui.ResetOnSpawn = false
+-- Variables
+local triggerEnabled = false
+local triggerDelay = 0.05
+local pingPrediction = 0.06
+local menuVisible = true
 
-local frame = Instance.new("Frame", screenGui)
+-- Création du GUI dans CoreGui (compatibilité Xeno)
+local gui = Instance.new("ScreenGui")
+gui.Name = "TriggerBotMenu"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = game:GetService("CoreGui")
+
+-- Cadre principal
+local frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 280, 0, 160)
 frame.Position = UDim2.new(0.5, -140, 0.5, -80)
 frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 frame.BorderSizePixel = 0
-frame.Visible = false
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
 local title = Instance.new("TextLabel", frame)
@@ -32,60 +39,56 @@ title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
 
-local statusLabel = Instance.new("TextLabel", frame)
-statusLabel.Size = UDim2.new(1, 0, 0, 40)
-statusLabel.Position = UDim2.new(0, 0, 0, 40)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.new(1, 1, 1)
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 16
-statusLabel.Text = "Status: OFF (press C)"
+local status = Instance.new("TextLabel", frame)
+status.Position = UDim2.new(0, 0, 0, 40)
+status.Size = UDim2.new(1, 0, 0, 40)
+status.BackgroundTransparency = 1
+status.Text = "Status: OFF (press C)"
+status.TextColor3 = Color3.new(1, 1, 1)
+status.Font = Enum.Font.Gotham
+status.TextSize = 16
 
--- Toggle Menu (Ctrl)
-UIS.InputBegan:Connect(function(input, processed)
-	if processed then return end
+-- Toggle menu (Ctrl)
+UIS.InputBegan:Connect(function(input, gp)
+	if gp then return end
 	if input.KeyCode == Enum.KeyCode.LeftControl then
-		frame.Visible = not frame.Visible
+		menuVisible = not menuVisible
+		frame.Visible = menuVisible
 	end
 end)
 
 -- Toggle TriggerBot (C)
-UIS.InputBegan:Connect(function(input, processed)
-	if processed then return end
+UIS.InputBegan:Connect(function(input, gp)
+	if gp then return end
 	if input.KeyCode == Enum.KeyCode.C then
-		TRIGGERBOT_ENABLED = not TRIGGERBOT_ENABLED
-		statusLabel.Text = "Status: " .. (TRIGGERBOT_ENABLED and "ON" or "OFF") .. " (press C)"
+		triggerEnabled = not triggerEnabled
+		status.Text = "Status: " .. (triggerEnabled and "ON" or "OFF") .. " (press C)"
 	end
 end)
 
--- Fonction de prédiction simple
-local function predictPosition(humanoidRootPart)
-	if not humanoidRootPart then return nil end
-	local velocity = humanoidRootPart.Velocity
-	local predicted = humanoidRootPart.Position + (velocity * PING_COMPENSATION)
-	return predicted
+-- Fonction prédiction simple
+local function predict(root)
+	if not root then return nil end
+	return root.Position + (root.Velocity * pingPrediction)
 end
 
--- Fonction qui vérifie si c'est un ennemi
-local function getTargetUnderMouse()
-	local target = mouse.Target
-	if not target then return nil end
-
-	local model = target:FindFirstAncestorOfClass("Model")
+-- Détection de joueur visé
+local function getTarget()
+	local mouse = player:GetMouse()
+	local part = mouse.Target
+	if not part then return nil end
+	local model = part:FindFirstAncestorOfClass("Model")
 	if not model then return nil end
-
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local humanoid = model:FindFirstChildWhichIsA("Humanoid")
 	local root = model:FindFirstChild("HumanoidRootPart")
-
 	if humanoid and humanoid.Health > 0 and root and Players:GetPlayerFromCharacter(model) ~= player then
 		return root
 	end
-
 	return nil
 end
 
--- Fonction qui tire
-local function fireWeapon()
+-- Arme
+local function fire()
 	local char = player.Character
 	if not char then return end
 	local tool = char:FindFirstChildOfClass("Tool")
@@ -94,19 +97,18 @@ local function fireWeapon()
 	end
 end
 
--- Boucle TriggerBot
+-- Loop principal
 RunService.RenderStepped:Connect(function()
-	if not TRIGGERBOT_ENABLED then return end
-
-	local targetHRP = getTargetUnderMouse()
-	if targetHRP then
-		local predictedPos = predictPosition(targetHRP)
-		if predictedPos then
-			local cam = workspace.CurrentCamera
-			cam.CFrame = CFrame.new(cam.CFrame.Position, predictedPos)
-			task.wait(TRIGGER_DELAY)
-			if getTargetUnderMouse() then
-				fireWeapon()
+	if not triggerEnabled then return end
+	local target = getTarget()
+	if target then
+		local cam = workspace.CurrentCamera
+		local predicted = predict(target)
+		if predicted then
+			cam.CFrame = CFrame.new(cam.CFrame.Position, predicted)
+			task.wait(triggerDelay)
+			if getTarget() then
+				fire()
 			end
 		end
 	end
