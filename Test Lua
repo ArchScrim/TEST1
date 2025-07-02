@@ -77,7 +77,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Helper: Check if a part is valid target part
+-- Helper: check if a part is valid target
 local function isValidPart(part)
     if not part then return false end
     local nameLower = part.Name:lower()
@@ -87,6 +87,10 @@ local function isValidPart(part)
     local humanoid = model:FindFirstChildOfClass("Humanoid")
     if not humanoid then return false end
     if humanoid.Health <= 10 then return false end
+
+    -- Check for ForceField on model (to detect shield)
+    if model:FindFirstChildOfClass("ForceField") then return false end
+
     return true
 end
 
@@ -102,7 +106,6 @@ RunService.RenderStepped:Connect(function()
 
     if now - lastClick >= delaySec then
         lastClick = now
-        -- Click instantly when cursor touches hitbox
         pcall(mouse1click)
     end
 end)
