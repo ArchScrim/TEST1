@@ -1,208 +1,294 @@
--- AimLock By ArchScrim - Smooth & Legit (Da Hood style)
+-- TriggerBot Avancé By ArchScrim
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
-
-repeat wait() until player.Character and player:FindFirstChild("PlayerGui")
+local camera = workspace.CurrentCamera
 
 -- Variables
-local aimlockEnabled = false
-local aimKey = Enum.KeyCode.Q -- touche d'activation par défaut
-local prediction = 0.055 -- prédiction légère (~55ms)
-local currentTarget = nil
+local triggerEnabled = false
 local menuVisible = true
+local triggerKey = Enum.KeyCode.C
+local prediction = 0.05 -- en secondes, ajustable par menu
+local minDelay = 0.05  -- délai minimum entre tirs (sec)
+local maxDelay = 0.15  -- délai max, pour varier
+local lastShotTime = 0
+
+-- Priorité des parties du corps
+local priorityParts = {"Head", "UpperTorso", "Torso", "LowerTorso"}
+
+-- Stockage positions pour prédiction
+local lastPositions = {}
 
 -- GUI Setup
 local gui = Instance.new("ScreenGui")
-gui.Name = "ArchScrimAimLock"
+gui.Name = "ArchScrimTriggerBotGUI"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = game:GetService("CoreGui")
 
+-- Frame
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 300, 0, 180)
-frame.Position = UDim2.new(0.5, -150, 0.5, -90)
-frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.Size = UDim2.new(0, 350, 0, 200)
+frame.Position = UDim2.new(0.5, -175, 0.5, -100)
+frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 frame.BorderSizePixel = 0
+frame.Visible = menuVisible
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
 
+-- Title
 local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1, 0, 0, 40)
+title.Size = UDim2.new(1, 0, 0, 35)
 title.BackgroundTransparency = 1
-title.Text = "AimLock System - By ArchScrim"
-title.TextColor3 = Color3.new(1, 1, 1)
+title.Text = "TriggerBot Avancé - By ArchScrim"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 20
 
+-- Status
 local status = Instance.new("TextLabel", frame)
-status.Position = UDim2.new(0, 10, 0, 45)
+status.Position = UDim2.new(0, 10, 0, 40)
 status.Size = UDim2.new(1, -20, 0, 25)
 status.BackgroundTransparency = 1
-status.Text = "Status: OFF (Q)"
-status.TextColor3 = Color3.new(1, 0.4, 0.4)
+status.Text = "Status: OFF (C)"
+status.TextColor3 = Color3.fromRGB(255, 100, 100)
 status.Font = Enum.Font.GothamSemibold
 status.TextSize = 18
 status.TextXAlignment = Enum.TextXAlignment.Left
 
-local toggleKeyLabel = Instance.new("TextLabel", frame)
-toggleKeyLabel.Position = UDim2.new(0, 10, 0, 75)
-toggleKeyLabel.Size = UDim2.new(1, -20, 0, 25)
-toggleKeyLabel.BackgroundTransparency = 1
-toggleKeyLabel.Text = "Touche Activation: Q"
-toggleKeyLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-toggleKeyLabel.Font = Enum.Font.Gotham
-toggleKeyLabel.TextSize = 16
-toggleKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+-- Prediction slider label
+local predLabel = Instance.new("TextLabel", frame)
+predLabel.Position = UDim2.new(0, 10, 0, 70)
+predLabel.Size = UDim2.new(0, 150, 0, 20)
+predLabel.BackgroundTransparency = 1
+predLabel.Text = "Prédiction: ".. tostring(math.floor(prediction*1000)) .." ms"
+predLabel.TextColor3 = Color3.fromRGB(180,180,180)
+predLabel.Font = Enum.Font.Gotham
+predLabel.TextSize = 14
+predLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local instruction = Instance.new("TextLabel", frame)
-instruction.Position = UDim2.new(0, 10, 0, 105)
-instruction.Size = UDim2.new(1, -20, 0, 60)
-instruction.BackgroundTransparency = 1
-instruction.Text = "Clique ici puis appuie sur une touche pour changer la touche d'activation.\nCtrl Droite pour ouvrir/fermer le menu."
-instruction.TextColor3 = Color3.fromRGB(180,180,180)
-instruction.Font = Enum.Font.Gotham
-instruction.TextSize = 14
-instruction.TextXAlignment = Enum.TextXAlignment.Left
+-- Prediction slider
+local predSlider = Instance.new("Frame", frame)
+predSlider.Position = UDim2.new(0, 10, 0, 90)
+predSlider.Size = UDim2.new(0, 150, 0, 15)
+predSlider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+predSlider.BorderSizePixel = 0
+Instance.new("UICorner", predSlider).CornerRadius = UDim.new(0, 5)
 
-frame.Visible = menuVisible
+local predFill = Instance.new("Frame", predSlider)
+predFill.Size = UDim2.new(prediction / 0.2, 0, 1, 0)
+predFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+Instance.new("UICorner", predFill).CornerRadius = UDim.new(0, 5)
 
--- Fonction pour choisir aléatoirement une partie du corps pour paraître naturel
-local function getTargetPart(character)
-    local parts = {
-        character:FindFirstChild("Head"),
-        character:FindFirstChild("UpperTorso"),
-        character:FindFirstChild("LowerTorso"),
-        character:FindFirstChild("RightUpperArm"),
-        character:FindFirstChild("LeftUpperArm"),
-        character:FindFirstChild("RightUpperLeg"),
-        character:FindFirstChild("LeftUpperLeg"),
-    }
-    local validParts = {}
-    for _, part in pairs(parts) do
-        if part then
-            table.insert(validParts, part)
-        end
+-- Delay slider label
+local delayLabel = Instance.new("TextLabel", frame)
+delayLabel.Position = UDim2.new(0, 10, 0, 110)
+delayLabel.Size = UDim2.new(0, 150, 0, 20)
+delayLabel.BackgroundTransparency = 1
+delayLabel.Text = "Délai tir: ".. tostring(math.floor(minDelay*1000)) .." - ".. tostring(math.floor(maxDelay*1000)) .." ms"
+delayLabel.TextColor3 = Color3.fromRGB(180,180,180)
+delayLabel.Font = Enum.Font.Gotham
+delayLabel.TextSize = 14
+delayLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Delay slider (simulate with one bar for simplicity)
+local delaySlider = Instance.new("Frame", frame)
+delaySlider.Position = UDim2.new(0, 10, 0, 130)
+delaySlider.Size = UDim2.new(0, 150, 0, 15)
+delaySlider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+delaySlider.BorderSizePixel = 0
+Instance.new("UICorner", delaySlider).CornerRadius = UDim.new(0, 5)
+
+local delayFill = Instance.new("Frame", delaySlider)
+delayFill.Size = UDim2.new(1, 0, 1, 0)
+delayFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+Instance.new("UICorner", delayFill).CornerRadius = UDim.new(0, 5)
+
+-- Indicateur visuel (petit cercle au centre de l’écran si prêt à tirer)
+local indicator = Instance.new("Frame", gui)
+indicator.AnchorPoint = Vector2.new(0.5, 0.5)
+indicator.Position = UDim2.new(0.5, 0, 0.5, 0)
+indicator.Size = UDim2.new(0, 20, 0, 20)
+indicator.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+indicator.Visible = false
+Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
+
+-- Notification lancement
+local function notify(text)
+    local notif = Instance.new("TextLabel", gui)
+    notif.Size = UDim2.new(0, 200, 0, 50)
+    notif.Position = UDim2.new(1, -210, 1, -60)
+    notif.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    notif.TextColor3 = Color3.fromRGB(100, 255, 100)
+    notif.Text = text
+    notif.Font = Enum.Font.GothamBold
+    notif.TextSize = 18
+    notif.TextWrapped = true
+    notif.BorderSizePixel = 0
+    Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 8)
+    wait(3)
+    notif:Destroy()
+end
+
+notify("TriggerBot Avancé lancé - By ArchScrim")
+
+-- Fonctions pour prédiction avancée
+local function getVelocity(part)
+    if not lastPositions[part] then
+        lastPositions[part] = part.Position
+        return Vector3.new(0,0,0)
     end
-    if #validParts == 0 then return nil end
-    return validParts[math.random(1, #validParts)]
+    local vel = (part.Position - lastPositions[part]) / RunService.RenderStepped:Wait()
+    lastPositions[part] = part.Position
+    return vel
 end
 
--- Prédiction simple
-local function getPrediction(part)
-    if not part then return nil end
-    return part.Position + (part.Velocity * prediction)
+local function getPredictedPosition(part)
+    local vel = getVelocity(part)
+    return part.Position + vel * prediction
 end
 
--- Vérifier visibilité (raycast)
+-- Check si partie visible (multi-raycast)
 local function isVisible(part)
-    local origin = workspace.CurrentCamera.CFrame.Position
-    local direction = (part.Position - origin).Unit * 500
+    local origin = camera.CFrame.Position
+    local direction = (part.Position - origin).Unit * 1000
     local raycastParams = RaycastParams.new()
     raycastParams.FilterDescendantsInstances = {player.Character}
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    local result = workspace:Raycast(origin, direction, raycastParams)
-    if result and result.Instance and result.Instance:IsDescendantOf(part.Parent) then
+
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    if raycastResult and raycastResult.Instance and raycastResult.Instance:IsDescendantOf(part.Parent) then
         return true
-    else
+    end
+    return false
+end
+
+-- Vérifie que la cible est valide
+local function isValidTarget(character)
+    if not character then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 1 then return false end
+    return true
+end
+
+-- Vérifie si le joueur est en action qui empêche tir (exemple: saut ou course)
+local function canShoot()
+    local char = player.Character
+    if not char then return false end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    if humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall then
         return false
     end
+    return true
 end
 
--- Trouver le joueur le plus proche du curseur visible et vivant
-local function getClosestPlayer()
-    local closestDist = math.huge
-    local closestPlayer = nil
+-- Cherche la meilleure partie du corps à viser sous la souris (selon priorité)
+local function getTargetPart()
+    local mouseTarget = mouse.Target
+    if not mouseTarget then return nil end
 
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character:FindFirstChild("HumanoidRootPart") then
-            local humanoid = p.Character.Humanoid
-            local root = p.Character.HumanoidRootPart
-            if humanoid.Health > 1 and isVisible(root) then
-                local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
-                if onScreen then
-                    local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                    if dist < closestDist and dist < 250 then
-                        closestDist = dist
-                        closestPlayer = p
-                    end
-                end
-            end
+    local character = mouseTarget.Parent
+    if not isValidTarget(character) then return nil end
+
+    for _, partName in ipairs(priorityParts) do
+        local part = character:FindFirstChild(partName)
+        if part and isVisible(part) then
+            return part
         end
     end
-
-    return closestPlayer
+    return nil
 end
 
--- Variables pour rotation smooth
-local camera = workspace.CurrentCamera
-local lerpSpeed = 12 -- plus élevé = rotation plus rapide
+-- Micro-mouvements légers de la souris (humanisation)
+local function microAdjustMouse()
+    local randX = (math.random() - 0.5) * 0.5
+    local randY = (math.random() - 0.5) * 0.5
+    local mousePos = UIS:GetMouseLocation()
+    mousemoverel(randX, randY) -- fonction à tester selon executor (souvent présente)
+end
 
-local currentCFrame = camera.CFrame
+-- Tir (simulé via MouseButton1Down & Up)
+local function shoot()
+    if tick() - lastShotTime < minDelay then return end
+    lastShotTime = tick()
 
--- Gestion ouverture/fermeture menu (Ctrl droite)
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+    mouse1press()
+    wait(0.05)
+    mouse1release()
+end
+
+-- Toggle menu avec Ctrl Droite (RightControl)
+UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end
     if input.KeyCode == Enum.KeyCode.RightControl then
         menuVisible = not menuVisible
         frame.Visible = menuVisible
+    elseif input.KeyCode == triggerKey then
+        triggerEnabled = not triggerEnabled
+        status.Text = "Status: " .. (triggerEnabled and "ON (C)" or "OFF (C)")
+        status.TextColor3 = triggerEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
     end
 end)
 
--- Gestion changement touche activation
-local waitingForKey = false
-frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and not waitingForKey then
-        waitingForKey = true
-        toggleKeyLabel.Text = "Appuyez sur une touche..."
+-- Main loop TriggerBot
+RunService.RenderStepped:Connect(function()
+    if not triggerEnabled or not canShoot() then 
+        indicator.Visible = false
+        return 
     end
-end)
 
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if waitingForKey and input.UserInputType == Enum.UserInputType.Keyboard then
-        aimKey = input.KeyCode
-        toggleKeyLabel.Text = "Touche Activation: " .. tostring(aimKey.Name)
-        waitingForKey = false
+    local part = getTargetPart()
+    if not part then
+        indicator.Visible = false
+        return
     end
-end)
 
--- Activer/désactiver AimLock avec la touche choisie
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == aimKey then
-        aimlockEnabled = not aimlockEnabled
-        status.Text = "Status: " .. (aimlockEnabled and "ON" or "OFF") .. " (" .. tostring(aimKey.Name) .. ")"
-        if not aimlockEnabled then
-            currentTarget = nil
-        end
-    end
-end)
+    local predictedPos = getPredictedPosition(part)
+    local screenPos, onScreen = camera:WorldToViewportPoint(predictedPos)
 
--- Fonction pour faire une rotation smooth de la caméra vers la cible
-local function smoothLookAt(current, targetPos, delta)
-    local direction = (targetPos - current.Position).Unit
-    local targetCFrame = CFrame.new(current.Position, current.Position + direction)
-    return current:Lerp(targetCFrame, math.clamp(delta * lerpSpeed, 0, 1))
-end
+    if onScreen then
+        -- Placer le curseur à la position prévue (nécessite exploit avec capacité move mouse)
+        mousemoverel((screenPos.X - UIS:GetMouseLocation().X), (screenPos.Y - UIS:GetMouseLocation().Y))
 
--- Boucle principale
-RunService.RenderStepped:Connect(function(dt)
-    if aimlockEnabled then
-        if not currentTarget or not currentTarget.Character or currentTarget.Character.Humanoid.Health <= 1 then
-            currentTarget = getClosestPlayer()
-        end
-        if currentTarget and currentTarget.Character then
-            local part = getTargetPart(currentTarget.Character)
-            local predictedPos = getPrediction(part)
-            if predictedPos then
-                currentCFrame = smoothLookAt(currentCFrame, predictedPos, dt)
-                camera.CFrame = currentCFrame
-            end
+        microAdjustMouse() -- micro-ajustements souris
+
+        indicator.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
+        indicator.Visible = true
+
+        -- Delay aléatoire entre tirs pour simuler humain
+        local delay = math.random() * (maxDelay - minDelay) + minDelay
+        if tick() - lastShotTime > delay then
+            shoot()
         end
     else
-        currentCFrame = camera.CFrame
+        indicator.Visible = false
     end
 end)
+
+-- Gestion slider prédiction
+predSlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local function move(input2)
+            local mouseX = input2.Position.X - predSlider.AbsolutePosition.X
+            local ratio = math.clamp(mouseX / predSlider.AbsoluteSize.X, 0, 1)
+            prediction = ratio * 0.2
+            predFill.Size = UDim2.new(ratio, 0, 1, 0)
+            predLabel.Text = "Prédiction: ".. tostring(math.floor(prediction*1000)) .." ms"
+        end
+        move(input)
+        local moveCon; moveCon = UIS.InputChanged:Connect(function(input3)
+            if input3.UserInputType == Enum.UserInputType.MouseMovement then
+                move(input3)
+            else
+                moveCon:Disconnect()
+            end
+        end)
+    end
+end)
+
+-- Gestion slider délai tir (ne change pas ici, c'est juste visuel / fixe dans script)
+-- Tu peux implémenter sliders aussi si tu veux les rendre dynamiques
+
